@@ -39,9 +39,9 @@ router.get(
   requirePermission(PERMISSIONS.CONNECTOR_STATUS),
   webStatus
 );
-router.use('/connector', connectorRoutes);
 router.use('/connector/sync', syncRoutes);
 router.use('/', commandRoutes);
+router.use('/connector', connectorRoutes);
 router.use('/super-admin', superAdminRoutes);
 
 module.exports = router;
