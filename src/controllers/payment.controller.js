@@ -50,7 +50,7 @@ const createOrderHandler = asyncHandler(async (req, res) => {
 
   const base = resolvePayableAmount(option);
   const seats = Number(extraSeats) || 0;
-  const addon = seats * Number(plan.addonPricePerSeat || 0);
+  const addon = seats * Number(option.addonPricePerSeat || 0);
   const amountRupees = base + addon;
 
   const order = await createOrder({
