@@ -141,54 +141,7 @@ const listVouchers = asyncHandler(async (req, res) => {
   return send(res, 200, { items, total, page, limit }, "Vouchers");
 });
 
-// const report = asyncHandler(async (req, res) => {
-//   const company = await scopedCompany(req);
-//   const type = req.params.reportType;
-//   const scope = { organizationId: req.organizationId, companyId: company._id };
 
-//   if (type === 'trial-balance') {
-//     const ledgers = await Ledger.find(scope).select('name group ledgerType openingBalance closingBalance');
-//     return send(res, 200, { reportType: type, ledgers }, 'Trial balance');
-//   }
-
-//   if (type === 'day-book') {
-//     const from = req.query.from ? new Date(req.query.from) : new Date(new Date().setHours(0, 0, 0, 0));
-//     const to = req.query.to ? new Date(req.query.to) : new Date();
-//     const vouchers = await Voucher.find({ ...scope, date: { $gte: from, $lte: to } }).sort({ date: 1 });
-//     return send(res, 200, { reportType: type, from, to, vouchers }, 'Day book');
-//   }
-
-//   if (type === 'pnl') {
-//     const ledgers = await Ledger.find({
-//       ...scope,
-//       ledgerType: { $in: ['income', 'expense', 'INCOME', 'EXPENSE'] },
-//     });
-//     const income = ledgers
-//       .filter((l) => String(l.ledgerType).toLowerCase() === 'income')
-//       .reduce((s, l) => s + (l.closingBalance || 0), 0);
-//     const expense = ledgers
-//       .filter((l) => String(l.ledgerType).toLowerCase() === 'expense')
-//       .reduce((s, l) => s + (l.closingBalance || 0), 0);
-//     return send(res, 200, { reportType: type, income, expense, net: income - expense, ledgers }, 'P&L');
-//   }
-
-//   if (type === 'balance-sheet') {
-//     const ledgers = await Ledger.find({
-//       ...scope,
-//       ledgerType: { $in: ['asset', 'liability', 'ASSET', 'LIABILITY'] },
-//     });
-//     return send(res, 200, { reportType: type, ledgers }, 'Balance sheet');
-//   }
-
-//   if (type === 'voucher-lines') {
-//     const voucherId = req.query.voucherId;
-//     if (!voucherId) throw new ApiError(400, 'voucherId query is required', ERROR_CODES.VALIDATION_ERROR);
-//     const lines = await VoucherLine.find({ ...scope, voucherId });
-//     return send(res, 200, { reportType: type, lines }, 'Voucher lines');
-//   }
-
-//   throw new ApiError(404, 'Unknown report type', ERROR_CODES.NOT_FOUND);
-// });
 
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
