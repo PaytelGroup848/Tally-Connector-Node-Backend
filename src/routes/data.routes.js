@@ -21,6 +21,17 @@ router.get(
 );
 
 router.get(
+  "/:id/godowns",
+  requirePermission(PERMISSIONS.STOCK_READ),
+  ctrl.listGodowns,
+);
+
+router.get(
+  "/:id/orders",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listOrders,
+);
+router.get(
   "/:id/customers",
   requirePermission(PERMISSIONS.CUSTOMER_READ),
   ctrl.listCustomers,
@@ -40,6 +51,12 @@ router.get(
   requirePermission(PERMISSIONS.VOUCHER_READ),
   ctrl.listVouchers,
 );
+router.get(
+  "/:id/sales",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listSales,
+);
+
 router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),

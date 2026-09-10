@@ -141,7 +141,6 @@ const listVouchers = asyncHandler(async (req, res) => {
   return send(res, 200, { items, total, page, limit }, "Vouchers");
 });
 
-
 const listVoucherTypes = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -169,6 +168,152 @@ const listVoucherTypes = asyncHandler(async (req, res) => {
   );
 });
 
+const listGodowns = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const godowns = await StockBalance.distinct("godown", {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    godown: {
+      $exists: true,
+      $nin: ["", null],
+    },
+  });
+
+  const items = godowns
+    .filter((name) => String(name).trim())
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((name) => ({
+      name: String(name).trim(),
+    }));
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total: items.length,
+    },
+    "Godowns",
+  );
+});
+
+const listOrders = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Sales Order",
+  };
+
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  const [items, total] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id voucherNumber voucherType date partyLedger amount narration tallyExternalId",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+  ]);
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+    },
+    "Orders",
+  );
+});
+
+const listSales = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Sales",
+  };
+
+  // Search by voucher number or party
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date range
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      const toDate = new Date(`${req.query.to}T23:59:59.999Z`);
+      filter.date.$lte = toDate;
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: { $ifNull: ["$amount", 0] },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Sales",
+  );
+});
 
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
@@ -558,4 +703,7 @@ module.exports = {
   listVouchers,
   report,
   listVoucherTypes,
+  listGodowns,
+  listOrders,
+  listSales,
 };
