@@ -13,6 +13,13 @@ router.get(
   requirePermission(PERMISSIONS.LEDGER_READ),
   ctrl.listLedgers,
 );
+
+router.get(
+  "/:id/voucher-types",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listVoucherTypes,
+);
+
 router.get(
   "/:id/customers",
   requirePermission(PERMISSIONS.CUSTOMER_READ),

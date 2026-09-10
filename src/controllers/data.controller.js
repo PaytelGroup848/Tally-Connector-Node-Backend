@@ -142,6 +142,33 @@ const listVouchers = asyncHandler(async (req, res) => {
 });
 
 
+const listVoucherTypes = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const items = await Voucher.distinct("voucherType", {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: {
+      $exists: true,
+      $nin: ["", null],
+    },
+  });
+
+  items.sort((a, b) => String(a).localeCompare(String(b)));
+
+  return send(
+    res,
+    200,
+    {
+      items: items.map((name) => ({
+        name,
+      })),
+      total: items.length,
+    },
+    "Voucher types",
+  );
+});
+
 
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
@@ -530,4 +557,5 @@ module.exports = {
   listStock,
   listVouchers,
   report,
+  listVoucherTypes,
 };
