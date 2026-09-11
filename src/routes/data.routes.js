@@ -82,6 +82,36 @@ router.get(
 );
 
 router.get(
+  "/:id/purchases",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listPurchases,
+);
+
+router.get(
+  "/:id/debit-notes",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listDebitNotes,
+);
+
+router.get(
+  "/:id/payments",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listPayments,
+);
+
+router.get(
+  "/:id/purchase-orders",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listPurchaseOrders,
+);
+
+router.get(
+  "/:id/receipt-notes",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listReceiptNotes,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,

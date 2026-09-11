@@ -590,6 +590,376 @@ const listDeliveryNotes = asyncHandler(async (req, res) => {
   );
 });
 
+const listPurchases = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Purchase",
+  };
+
+  // Search by Bill/Voucher Number or Party/Ledger
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$amount", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Purchases",
+  );
+});
+
+const listDebitNotes = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Debit Note",
+  };
+
+  // Search by voucher/bill number or party name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$amount", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Debit notes",
+  );
+});
+
+const listPayments = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Payment",
+  };
+
+  // Search by voucher number or party/ledger
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$amount", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Payments",
+  );
+});
+
+const listPurchaseOrders = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Purchase Order",
+  };
+
+  // Search by order number or party name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$amount", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Purchase orders",
+  );
+});
+
+const listReceiptNotes = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Receipt Note",
+  };
+
+  // Search by receipt note number or party name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+
+    Voucher.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$amount", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Receipt notes",
+  );
+});
+
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -985,4 +1355,9 @@ module.exports = {
   listReceipts,
   listSalesOrders,
   listDeliveryNotes,
+  listPurchases,
+  listDebitNotes,
+  listPayments,
+  listPurchaseOrders,
+  listReceiptNotes,
 };
