@@ -64,6 +64,12 @@ router.get(
 );
 
 router.get(
+  "/:id/receipts",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listReceipts,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,
