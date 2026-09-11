@@ -70,6 +70,12 @@ router.get(
 );
 
 router.get(
+  "/:id/sales-orders",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listSalesOrders,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,
