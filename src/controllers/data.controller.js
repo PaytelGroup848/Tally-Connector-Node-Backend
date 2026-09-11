@@ -534,6 +534,62 @@ const listSalesOrders = asyncHandler(async (req, res) => {
   );
 });
 
+const listDeliveryNotes = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    voucherType: "Delivery Note",
+  };
+
+  // Search by Delivery Note Number / Party Name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.$or = [{ voucherNumber: regex }, { partyLedger: regex }];
+  }
+
+  // Date filter
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+
+    if (req.query.from) {
+      filter.date.$gte = new Date(`${req.query.from}T00:00:00.000Z`);
+    }
+
+    if (req.query.to) {
+      filter.date.$lte = new Date(`${req.query.to}T23:59:59.999Z`);
+    }
+  }
+
+  const [items, total] = await Promise.all([
+    Voucher.find(filter)
+      .select(
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+      )
+      .sort({ date: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Voucher.countDocuments(filter),
+  ]);
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+    },
+    "Delivery notes",
+  );
+});
+
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -928,4 +984,5 @@ module.exports = {
   listCreditNotes,
   listReceipts,
   listSalesOrders,
+  listDeliveryNotes,
 };
