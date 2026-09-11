@@ -58,6 +58,12 @@ router.get(
 );
 
 router.get(
+  "/:id/credit-notes",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  ctrl.listCreditNotes,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,
