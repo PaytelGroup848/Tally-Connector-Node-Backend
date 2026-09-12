@@ -112,6 +112,12 @@ router.get(
 );
 
 router.get(
+  "/:id/cash",
+  requirePermission(PERMISSIONS.LEDGER_READ),
+  ctrl.listCashLedgers,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,
