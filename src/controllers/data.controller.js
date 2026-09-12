@@ -1021,6 +1021,66 @@ const listCashLedgers = asyncHandler(async (req, res) => {
   );
 });
 
+const listBankLedgers = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    $or: [{ group: "Bank Accounts" }, { parent: "Bank Accounts" }],
+  };
+
+  // Search by bank ledger name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+    filter.name = regex;
+  }
+
+  const [items, total, totalAmountResult] = await Promise.all([
+    Ledger.find(filter)
+      .select(
+        "_id tallyExternalId name openingBalance closingBalance group parent ledgerType",
+      )
+      .sort({ name: 1, _id: 1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Ledger.countDocuments(filter),
+
+    Ledger.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalAmount: {
+            $sum: {
+              $ifNull: ["$closingBalance", 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const totalAmount =
+    totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+      totalAmount,
+    },
+    "Bank",
+  );
+});
+
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -1422,4 +1482,5 @@ module.exports = {
   listPurchaseOrders,
   listReceiptNotes,
   listCashLedgers,
+  listBankLedgers,
 };
