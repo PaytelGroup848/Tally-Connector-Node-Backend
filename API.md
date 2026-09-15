@@ -641,3 +641,68 @@ Empty `commands` array means nothing to do. Poll every few seconds.
 
 - **Auth:** None  
 - **Success:** `{ "success": true, "message": "ok" }` (mounted at `/api/health`)
+
+---
+
+# Section 8d — My Entries (web track record of created entries)
+
+These endpoints list and cancel **Commands** created from the web app (`POST /companies/:id/commands`). They are the user's own track record, including entries that have not synced to Tally yet.
+
+`POST /companies/:id/commands` accepts any string `type` and a mixed `payload` (no server-side enum). The documented example type is `CREATE_VOUCHER`. Screens below filter on `type` and, for voucher screens, `payload.voucherType`.
+
+| Screen | Query |
+|---|---|
+| My Vouchers | `type=CREATE_VOUCHER` |
+| My Quotations | `type=CREATE_VOUCHER&voucherType=Quotation` |
+| My Invoices | `type=CREATE_VOUCHER&voucherType=Sales` |
+| My Parties | `type=CREATE_PARTY` |
+| My Stock Items | `type=CREATE_STOCK_ITEM` |
+| My eWay Bills | not implemented yet |
+
+`voucherType` is matched against `payload.voucherType`. Synced voucher lists in this API use Tally names such as `Sales`, `Quotation`, `Receipt`, `Payment`, `Sales Order`, `Purchase`, `Purchase Order`, `Journal`, `Contra`, `Credit Note`, `Debit Note`, `Stock Journal`, `Physical Stock`, `Receipt Note`, `Delivery Note` — send the same strings the create payload used (not camelCase aliases like `SalesInvoice`).
+
+`CREATE_PARTY` and `CREATE_STOCK_ITEM` are client-chosen `type` values; the create handler does not whitelist them.
+
+Once a Command is `DONE`, the real record also appears in the synced data APIs (`/companies/:id/vouchers`, `/customers`, `/stock`, etc.). The connector posts `{ "status": "DONE" \| "FAILED", "resultPayload", "errorMessage" }`; `resultPayload` is stored as `result`. The documented connector example is `{ "tallyVoucherNumber": "INV-101" }`. Treat `result` as mixed — use whatever identifier the connector stored (e.g. `tallyVoucherNumber`, `tallyExternalId`, or a Mongo `_id`).
+
+### GET `/companies/:id/commands`
+
+- **Auth:** Web JWT + `COMMAND_CREATE`
+- **Use case:** My Entries list (All / Pending / Completed tabs, date range, search, pagination).
+- **Query:**
+  - `type` — exact Command type (e.g. `CREATE_VOUCHER`)
+  - `voucherType` — exact `payload.voucherType` (e.g. `Sales`, `Quotation`)
+  - `status` — comma-separated Command statuses. Pending tab: `status=PENDING,SENT`. Completed tab: `status=DONE`. All tab: omit `status`. Optional: include `FAILED` if the UI should show failures.
+  - `from`, `to` — ISO dates on `createdAt`
+  - `q` — case-insensitive search in `payload.name`, `payload.partyName`, `payload.partyLedger`, `payload.voucherNumber`, `payload.itemName`
+  - `page` (default 1), `limit` (default 20, max 100)
+- **Success `200`:**
+
+```json
+{
+  "commands": [
+    {
+      "id": "...",
+      "type": "CREATE_VOUCHER",
+      "status": "PENDING",
+      "payload": { "voucherType": "Sales", "partyLedger": "Customer A", "voucherNumber": "INV-101" },
+      "result": null,
+      "errorMessage": null,
+      "createdAt": "...",
+      "completedAt": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 20
+}
+```
+
+- **Errors:** `FORBIDDEN`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_REQUIRED`
+
+### DELETE `/companies/:id/commands/:commandId`
+
+- **Auth:** Web JWT + `COMMAND_CREATE`
+- **Use case:** Remove a not-yet-synced My Entry. Only `PENDING` commands can be cancelled (`SENT` means the connector already picked it up).
+- **Success `200`:** `null`
+- **Errors:** `COMMAND_NOT_FOUND`, `CONFLICT` (status is not `PENDING`), `FORBIDDEN`, `SUBSCRIPTION_EXPIRED`

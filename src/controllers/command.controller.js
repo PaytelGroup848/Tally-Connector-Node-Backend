@@ -77,6 +77,91 @@ const getById = asyncHandler(async (req, res) => {
   );
 });
 
+const list = asyncHandler(async (req, res) => {
+  const { id: companyId } = req.params;
+  const { type, status, from, to, q, voucherType, page = 1, limit = 20 } = req.query;
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId,
+  };
+
+  if (type) filter.type = type;
+
+  if (status) {
+    const statuses = String(status)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (statuses.length) filter.status = { $in: statuses };
+  }
+
+  if (voucherType) filter['payload.voucherType'] = voucherType;
+
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to);
+  }
+
+  if (q) {
+    filter.$or = [
+      { 'payload.name': { $regex: q, $options: 'i' } },
+      { 'payload.partyName': { $regex: q, $options: 'i' } },
+      { 'payload.partyLedger': { $regex: q, $options: 'i' } },
+      { 'payload.voucherNumber': { $regex: q, $options: 'i' } },
+      { 'payload.itemName': { $regex: q, $options: 'i' } },
+    ];
+  }
+
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
+  const skip = (pageNum - 1) * limitNum;
+
+  const [items, total] = await Promise.all([
+    Command.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Command.countDocuments(filter),
+  ]);
+
+  return send(
+    res,
+    200,
+    {
+      commands: items.map((c) => ({
+        id: c._id,
+        type: c.type,
+        status: c.status,
+        payload: c.payload,
+        result: c.result,
+        errorMessage: c.errorMessage,
+        createdAt: c.createdAt,
+        completedAt: c.completedAt,
+      })),
+      total,
+      page: pageNum,
+      limit: limitNum,
+    },
+    'Commands'
+  );
+});
+
+const cancel = asyncHandler(async (req, res) => {
+  const { id: companyId, commandId } = req.params;
+  const command = await Command.findOne({
+    _id: commandId,
+    companyId,
+    organizationId: req.organizationId,
+  });
+  if (!command) {
+    throw new ApiError(404, 'Command not found', ERROR_CODES.COMMAND_NOT_FOUND);
+  }
+  if (command.status !== 'PENDING') {
+    throw new ApiError(409, 'Only pending entries can be cancelled', ERROR_CODES.CONFLICT);
+  }
+  await command.deleteOne();
+  return send(res, 200, null, 'Command cancelled');
+});
+
 const poll = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 10, 50);
   const commands = await Command.find({
@@ -131,4 +216,13 @@ const submitResult = asyncHandler(async (req, res) => {
   );
 });
 
-module.exports = { create, getById, poll, submitResult, createValidators, resultValidators };
+module.exports = {
+  create,
+  getById,
+  list,
+  cancel,
+  poll,
+  submitResult,
+  createValidators,
+  resultValidators,
+};

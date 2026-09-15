@@ -14,7 +14,19 @@ router.post(
   requirePermission(PERMISSIONS.COMMAND_CREATE),
   ctrl.createValidators,
   validate,
-  ctrl.create
+  ctrl.create  
+);
+router.get(
+  '/companies/:id/commands',
+  webAuth,
+  requirePermission(PERMISSIONS.COMMAND_CREATE),
+  ctrl.list
+);
+router.delete(
+  '/companies/:id/commands/:commandId',
+  webAuth,
+  requirePermission(PERMISSIONS.COMMAND_CREATE),
+  ctrl.cancel
 );
 router.get('/commands/:id', webAuth, requireActiveSubscription, ctrl.getById);
 
