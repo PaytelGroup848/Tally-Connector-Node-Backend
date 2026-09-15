@@ -124,6 +124,12 @@ router.get(
 );
 
 router.get(
+  "/:id/parties",
+  requirePermission(PERMISSIONS.CUSTOMER_READ),
+  ctrl.listParties,
+);
+
+router.get(
   "/:id/reports/:reportType",
   requirePermission(PERMISSIONS.REPORTS_READ),
   ctrl.report,

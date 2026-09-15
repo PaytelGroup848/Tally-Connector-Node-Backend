@@ -111,12 +111,15 @@ const mapRecord = (entityType, record, ctx) => {
       return {
         ...base,
         name: record.name,
-        gstin: record.gstin || '',
-        email: record.email || '',
-        phone: record.phone || '',
-        address: record.address || '',
+        gstin: record.gstin || "",
+        email: record.email || "",
+        phone: record.phone || "",
+        address: record.address || "",
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
+
+        creditLimit: { type: Number, default: null },
+        creditDays: { type: Number, default: null },
       };
     case 'SUPPLIER':
       return {

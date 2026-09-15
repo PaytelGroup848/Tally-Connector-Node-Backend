@@ -4,27 +4,31 @@ const customerSchema = new mongoose.Schema(
   {
     organizationId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Organization',
+      ref: "Organization",
       required: true,
       index: true,
     },
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
+      ref: "Company",
       required: true,
       index: true,
     },
     tallyExternalId: { type: String, required: true, trim: true },
     name: { type: String, required: true },
-    gstin: { type: String, default: '' },
-    email: { type: String, default: '' },
-    phone: { type: String, default: '' },
-    address: { type: String, default: '' },
+    gstin: { type: String, default: "" },
+    email: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    address: { type: String, default: "" },
     openingBalance: { type: Number, default: 0 },
     closingBalance: { type: Number, default: 0 },
+
+    creditLimit: { type: Number, default: null },
+    creditDays: { type: Number, default: null },
+
     raw: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 customerSchema.index(

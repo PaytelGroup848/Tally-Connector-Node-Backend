@@ -1081,6 +1081,116 @@ const listBankLedgers = asyncHandler(async (req, res) => {
   );
 });
 
+const listParties = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const { page, limit, skip } = paginate(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+  };
+
+  // Search party name
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+
+    filter.name = regex;
+  }
+
+  const [parties, total] = await Promise.all([
+    Customer.find(filter)
+      .select(
+        "_id tallyExternalId name email gstin phone address openingBalance closingBalance creditLimit creditDays createdAt updatedAt",
+      )
+      .sort({ name: 1, _id: 1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Customer.countDocuments(filter),
+  ]);
+
+  const partyNames = parties.map((party) => party.name).filter(Boolean);
+
+  const lastSales = partyNames.length
+    ? await Voucher.aggregate([
+        {
+          $match: {
+            organizationId: req.organizationId,
+            companyId: company._id,
+            voucherType: "Sales",
+            date: { $ne: null },
+          },
+        },
+        {
+          $addFields: {
+            normalizedPartyLedger: {
+              $toLower: {
+                $trim: {
+                  input: { $ifNull: ["$partyLedger", ""] },
+                },
+              },
+            },
+          },
+        },
+        {
+          $match: {
+            normalizedPartyLedger: {
+              $in: partyNames.map((name) => name.trim().toLowerCase()),
+            },
+          },
+        },
+        {
+          $group: {
+            _id: "$normalizedPartyLedger",
+            lastSoldDate: { $max: "$date" },
+          },
+        },
+      ])
+    : [];
+
+  const lastSaleMap = new Map(
+    lastSales.map((item) => [item._id, item.lastSoldDate]),
+  );
+
+  const items = parties.map((party) => {
+    const normalizedName = (party.name || "").trim().toLowerCase();
+
+    return {
+      _id: party._id,
+      tallyExternalId: party.tallyExternalId,
+      partyName: party.name,
+
+      lastSoldDate: lastSaleMap.get(normalizedName) || null,
+
+      creditLimit: party.creditLimit ?? null,
+      creditDays: party.creditDays ?? null,
+
+      closingBalance: party.closingBalance ?? 0,
+
+      email: party.email || "",
+      gstin: party.gstin || "",
+      phone: party.phone || "",
+      address: party.address || "",
+
+      createdAt: party.createdAt,
+      updatedAt: party.updatedAt,
+    };
+  });
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total,
+      page,
+      limit,
+    },
+    "Parties",
+  );
+});
+
 const report = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -1483,4 +1593,5 @@ module.exports = {
   listReceiptNotes,
   listCashLedgers,
   listBankLedgers,
+  listParties,
 };
