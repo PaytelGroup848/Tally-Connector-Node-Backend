@@ -198,6 +198,46 @@ const listGodowns = asyncHandler(async (req, res) => {
   );
 });
 
+const listBatches = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+    batch: {
+      $exists: true,
+      $nin: ["", null],
+    },
+  };
+
+  // Batches belong to a specific item — filter when the item is known.
+  if (req.query.itemName) {
+    filter.itemName = req.query.itemName;
+  }
+  if (req.query.itemTallyExternalId) {
+    filter.itemTallyExternalId = req.query.itemTallyExternalId;
+  }
+
+  const batches = await StockBalance.distinct("batch", filter);
+
+  const items = batches
+    .filter((name) => String(name).trim())
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((name) => ({
+      name: String(name).trim(),
+    }));
+
+  return send(
+    res,
+    200,
+    {
+      items,
+      total: items.length,
+    },
+    "Batches",
+  );
+});
+
 const listOrders = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
 
@@ -1594,4 +1634,5 @@ module.exports = {
   listCashLedgers,
   listBankLedgers,
   listParties,
+  listBatches,
 };

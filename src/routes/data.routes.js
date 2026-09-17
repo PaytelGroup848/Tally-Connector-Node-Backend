@@ -27,6 +27,12 @@ router.get(
 );
 
 router.get(
+  "/:id/batches",
+  requirePermission(PERMISSIONS.STOCK_READ),
+  ctrl.listBatches,
+);
+
+router.get(
   "/:id/orders",
   requirePermission(PERMISSIONS.VOUCHER_READ),
   ctrl.listOrders,
