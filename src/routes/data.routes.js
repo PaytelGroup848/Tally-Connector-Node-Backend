@@ -3,6 +3,7 @@ const webAuth = require("../middlewares/webAuth.middleware");
 const { requirePermission } = require("../middlewares/rbac.middleware");
 const { PERMISSIONS } = require("../constants/permissions");
 const ctrl = require("../controllers/data.controller");
+const { getDashboard } = require("../controllers/dashboard.controller");
 
 const router = express.Router();
 
@@ -127,6 +128,12 @@ router.get(
   "/:id/bank",
   requirePermission(PERMISSIONS.LEDGER_READ),
   ctrl.listBankLedgers,
+);
+
+router.get(
+  "/:id/dashboard",
+  requirePermission(PERMISSIONS.REPORTS_READ),
+  getDashboard,
 );
 
 router.get(

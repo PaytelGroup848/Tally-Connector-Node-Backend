@@ -14,6 +14,7 @@ const Item = require('../models/Item');
 const Voucher = require('../models/Voucher');
 const VoucherLine = require('../models/VoucherLine');
 const StockBalance = require('../models/StockBalance');
+const BillAllocation = require('../models/BillAllocation');
 
 const ENTITY_MODELS = {
   LEDGER: Ledger,
@@ -118,8 +119,8 @@ const mapRecord = (entityType, record, ctx) => {
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
 
-        creditLimit: { type: Number, default: null },
-        creditDays: { type: Number, default: null },
+        creditLimit: record.creditLimit ?? null,
+        creditDays: record.creditDays ?? null,
       };
     case 'SUPPLIER':
       return {
@@ -178,6 +179,21 @@ const mapRecord = (entityType, record, ctx) => {
   }
 };
 
+const mapBillAllocation = (line, voucher, ctx) => ({
+  organizationId: ctx.organizationId,
+  companyId: ctx.companyId,
+  tallyExternalId: String(line.tallyExternalId),
+  voucherId: voucher._id,
+  voucherType: voucher.voucherType,
+  voucherDate: voucher.date,
+  partyLedger: voucher.partyLedger,
+  billName: line.billName,
+  billType: line.billType || "New Ref",
+  amount: line.amount || 0,
+  dueDate: line.dueDate ? new Date(line.dueDate) : null,
+  raw: line,
+});
+
 const batch = asyncHandler(async (req, res) => {
   const { syncJobId, entityType, records } = req.body;
   const job = await SyncJob.findOne({
@@ -228,22 +244,52 @@ const batch = asyncHandler(async (req, res) => {
         upserted += 1;
         lastExternalId = String(record.tallyExternalId);
 
-        for (const [idx, line] of record.lines.entries()) {
-          const lineExt = line.tallyExternalId || `${record.tallyExternalId}:${idx}`;
-          const lineDoc = mapRecord('VOUCHER_LINE', { ...line, tallyExternalId: lineExt, voucherId: saved._id }, {
-            organizationId: req.organizationId,
-            companyId: job.companyId,
-          });
-          await VoucherLine.findOneAndUpdate(
-            {
-              organizationId: req.organizationId,
-              companyId: job.companyId,
-              tallyExternalId: lineExt,
-            },
-            { $set: lineDoc },
-            { upsert: true, new: true }
-          );
-        }
+          for (const [idx, line] of record.lines.entries()) {
+            const lineExt =
+              line.tallyExternalId || `${record.tallyExternalId}:${idx}`;
+            const lineDoc = mapRecord(
+              "VOUCHER_LINE",
+              { ...line, tallyExternalId: lineExt, voucherId: saved._id },
+              {
+                organizationId: req.organizationId,
+                companyId: job.companyId,
+              },
+            );
+            await VoucherLine.findOneAndUpdate(
+              {
+                organizationId: req.organizationId,
+                companyId: job.companyId,
+                tallyExternalId: lineExt,
+              },
+              { $set: lineDoc },
+              { upsert: true, new: true },
+            );
+          }
+
+          // NEW: bill-wise details (for accurate receivables/payables aging)
+          if (Array.isArray(record.billAllocations)) {
+            for (const [idx, bill] of record.billAllocations.entries()) {
+              const billExt =
+                bill.tallyExternalId || `${record.tallyExternalId}:bill:${idx}`;
+              const billDoc = mapBillAllocation(
+                { ...bill, tallyExternalId: billExt },
+                saved,
+                {
+                  organizationId: req.organizationId,
+                  companyId: job.companyId,
+                },
+              );
+              await BillAllocation.findOneAndUpdate(
+                {
+                  organizationId: req.organizationId,
+                  companyId: job.companyId,
+                  tallyExternalId: billExt,
+                },
+                { $set: billDoc },
+                { upsert: true, new: true },
+              );
+            }
+          }
         continue;
       }
 
