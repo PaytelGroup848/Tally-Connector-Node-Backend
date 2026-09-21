@@ -44,4 +44,7 @@ router.use('/', commandRoutes);
 router.use('/connector', connectorRoutes);
 router.use('/super-admin', superAdminRoutes);
 
+router.use("/reminder-template", require("./reminderTemplate.routes"));
+router.use("/companies", require("./reminder.routes"));
+
 module.exports = router;
