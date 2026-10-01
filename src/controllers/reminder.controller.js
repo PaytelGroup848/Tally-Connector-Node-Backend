@@ -12,6 +12,7 @@ const {
   buildReminderEmailHtml,
 } = require("../services/reminderTemplateHtml.service");
 const { logAudit } = require("../services/audit.service");
+const { withPartyContact } = require("../utils/partyContact");
 
 const DEFAULT_MESSAGE =
   "Your outstanding balance of ₹{outstandingAmount} is pending. Kindly clear it at the earliest.";
@@ -30,7 +31,7 @@ const sendEmailReminder = asyncHandler(async (req, res) => {
   const company = await Company.findOne({
     _id: req.params.id,
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!company)
     throw new ApiError(404, "Company not found", ERROR_CODES.NOT_FOUND);
 
@@ -41,10 +42,11 @@ const sendEmailReminder = asyncHandler(async (req, res) => {
     _id: partyId,
     organizationId: req.organizationId,
     companyId: company._id,
-  });
+  }).lean();
   if (!party) throw new ApiError(404, "Party not found", ERROR_CODES.NOT_FOUND);
 
-  if (!party.email) {
+  const contact = withPartyContact(party);
+  if (!contact.email) {
     throw new ApiError(
       400,
       "This party has no email on file",
@@ -54,7 +56,7 @@ const sendEmailReminder = asyncHandler(async (req, res) => {
 
   const templateDoc = await ReminderTemplate.findOne({
     organizationId: req.organizationId,
-  });
+  }).lean();
   const template = templateDoc?.message || DEFAULT_MESSAGE;
 
   const formattedAmount = party.closingBalance;
@@ -72,7 +74,7 @@ const sendEmailReminder = asyncHandler(async (req, res) => {
   });
 
   await sendReminderEmail({
-    to: party.email,
+    to: contact.email,
     toName: party.name,
     subject: `Payment Reminder — ${company.tallyCompanyName || ""}`,
     html,
@@ -83,7 +85,7 @@ const sendEmailReminder = asyncHandler(async (req, res) => {
     actorType: "USER",
     actorId: req.user._id,
     action: "REMINDER_EMAIL_SENT",
-    meta: { partyId, partyType, email: party.email },
+    meta: { partyId, partyType, email: contact.email },
   });
 
   return send(res, 200, { sentTo: party.email }, "Reminder email sent");

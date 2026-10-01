@@ -34,4 +34,9 @@ const syncJobSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+syncJobSchema.index(
+  { organizationId: 1, startedAt: -1 },
+  { background: true }
+);
+
 module.exports = mongoose.model('SyncJob', syncJobSchema);

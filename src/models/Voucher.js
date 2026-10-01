@@ -28,5 +28,21 @@ const voucherSchema = new mongoose.Schema(
 
 voucherSchema.index({ organizationId: 1, companyId: 1, tallyExternalId: 1 }, { unique: true });
 voucherSchema.index({ organizationId: 1, companyId: 1, date: -1 });
+voucherSchema.index(
+  { organizationId: 1, companyId: 1, voucherType: 1, partyLedger: 1 },
+  { background: true }
+);
+voucherSchema.index(
+  { organizationId: 1, companyId: 1, voucherType: 1, date: -1 },
+  { background: true }
+);
+voucherSchema.index(
+  { organizationId: 1, companyId: 1, voucherType: 1, partyLedger: 1 },
+  { background: true }
+);
+voucherSchema.index(
+  { organizationId: 1, companyId: 1, voucherType: 1, date: -1 },
+  { background: true }
+);
 
 module.exports = mongoose.model('Voucher', voucherSchema);

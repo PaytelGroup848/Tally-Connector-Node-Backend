@@ -37,4 +37,37 @@ router.post('/plans', superAdminAuth, ctrl.planBodyValidators, validate, ctrl.cr
 router.patch('/plans/:id', superAdminAuth, ctrl.patchPlan);
 router.get('/connectors', superAdminAuth, ctrl.listConnectors);
 
+router.get("/users", superAdminAuth, ctrl.listUsers);
+router.patch(
+  "/users/:id/suspend",
+  superAdminAuth,
+  ctrl.suspendUserValidators,
+  validate,
+  ctrl.toggleUserSuspend,
+);
+
+router.get(
+  "/users/:id/companies",
+  superAdminAuth,
+  ctrl.listUserCompaniesValidators,
+  validate,
+  ctrl.listUserCompanies,
+);
+router.patch(
+  "/users/:id/companies",
+  superAdminAuth,
+  ctrl.assignCompaniesValidators,
+  validate,
+  ctrl.assignCompanies,
+);
+
+
+router.post(
+  "/users",
+  superAdminAuth,
+  ctrl.createUserValidators,
+  validate,
+  ctrl.createUser,
+);
+
 module.exports = router;

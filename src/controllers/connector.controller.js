@@ -59,7 +59,7 @@ const me = asyncHandler(async (req, res) => {
 });
 
 const listCompanies = asyncHandler(async (req, res) => {
-  const companies = await Company.find({ organizationId: req.organizationId, isActive: true });
+  const companies = await Company.find({ organizationId: req.organizationId, isActive: true }).lean();
   return send(
     res,
     200,
@@ -175,9 +175,11 @@ const version = asyncHandler(async (req, res) => {
 
 const webStatus = asyncHandler(async (req, res) => {
   const connectors = await Connector.find({ organizationId: req.organizationId });
-  const lastJob = await SyncJob.findOne({ organizationId: req.organizationId }).sort({
+  const lastJob = await SyncJob.findOne({ organizationId: req.organizationId })
+    .sort({
     startedAt: -1,
-  });
+  })
+    .lean();
   const mapped = connectors.map((c) => {
     maybeMarkOffline(c);
     return {

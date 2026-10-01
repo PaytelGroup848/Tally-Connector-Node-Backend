@@ -24,4 +24,18 @@ router.post(
   ctrl.verifyHandler,
 );
 
+router.post(
+  "/seats/create-order",
+  webAuth,
+  requireRolePermission(PERMISSIONS.PAYMENT_CREATE),
+  ctrl.createSeatOrderValidators,
+  validate,
+  ctrl.createSeatOrderHandler,
+);
+router.post(
+  "/seats/verify",
+  webAuth,
+  requireRolePermission(PERMISSIONS.PAYMENT_CREATE),
+  ctrl.verifySeatOrderHandler,
+);
 module.exports = router;

@@ -3,7 +3,7 @@ const { send } = require("../utils/ApiResponse");
 const Plan = require("../models/Plan");
 
 const listPublicPlans = asyncHandler(async (req, res) => {
-  const plans = await Plan.find({ isActive: true }).sort({ createdAt: 1 });
+  const plans = await Plan.find({ isActive: true }).sort({ createdAt: 1 }).lean();
   return send(
     res,
     200,

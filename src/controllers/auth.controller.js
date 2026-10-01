@@ -1,46 +1,90 @@
-const { body } = require('express-validator');
-const asyncHandler = require('../utils/asyncHandler');
-const { send } = require('../utils/ApiResponse');
-const { createAndStoreOtp, verifyOtp } = require('../services/otp.service');
-const { sendOtpEmail } = require('../services/email.service');
-const { signWebToken } = require('../services/token.service');
-const { ensureUser, ensureOwnerOrg } = require('../services/org.service');
-const { logAudit } = require('../services/audit.service');
+const { body } = require("express-validator");
+const asyncHandler = require("../utils/asyncHandler");
+const { send } = require("../utils/ApiResponse");
+const { createAndStoreOtp, verifyOtp } = require("../services/otp.service");
+const { sendOtpEmail } = require("../services/email.service");
+const { signWebToken } = require("../services/token.service");
+const { ensureUser, ensureOwnerOrg } = require("../services/org.service");
+const { logAudit } = require("../services/audit.service");
+const OrganizationMember = require("../models/OrganizationMember");
+const User = require("../models/User");
+const {
+  assertMemberLoginAllowed,
+} = require("../services/scheduleAccess.service");
 
-const cookieName = () => process.env.WEB_JWT_COOKIE_NAME || 'lk_web_token';
+const cookieName = () => process.env.WEB_JWT_COOKIE_NAME || "lk_web_token";
 
 const setWebCookie = (res, token) => {
   res.cookie(cookieName(), token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };
 
 const sendOtpValidators = [
-  body('email').isEmail().withMessage('Valid email is required'),
+  body("email").isEmail().withMessage("Valid email is required"),
 ];
 
 const verifyOtpValidators = [
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('otp').isLength({ min: 4, max: 4 }).withMessage('OTP must be 4 digits'),
+  body("email").isEmail().withMessage("Valid email is required"),
+  body("otp").isLength({ min: 4, max: 4 }).withMessage("OTP must be 4 digits"),
 ];
 
 const sendOtp = asyncHandler(async (req, res) => {
   const email = req.body.email.toLowerCase().trim();
-  const { otp, expiryMinutes } = await createAndStoreOtp(email, 'WEB');
-  await sendOtpEmail(email, otp, expiryMinutes, 'LiveKeeping');
-  return send(res, 200, { email, expiresInMinutes: expiryMinutes }, 'OTP sent');
+
+  const user = await User.findOne({ email }).lean();
+
+  if (user) {
+    if (user.isSuspended) {
+      return send(
+        res,
+        403,
+        null,
+        "Your account has been suspended by the platform administrator.",
+      );
+    }
+
+    const membership = await OrganizationMember.findOne({
+      userId: user._id,
+      status: "ACTIVE",
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    if (membership && membership.role !== "OWNER") {
+      try {
+        assertMemberLoginAllowed(membership);
+      } catch (err) {
+        return send(res, err.statusCode || 403, null, err.message);
+      }
+    }
+  }
+
+  const { otp, expiryMinutes } = await createAndStoreOtp(email, "WEB");
+
+  await sendOtpEmail(email, otp, expiryMinutes, "LiveKeeping");
+
+  return send(
+    res,
+    200,
+    {
+      email,
+      expiresInMinutes: expiryMinutes,
+    },
+    "OTP sent",
+  );
 });
 
 const verifyOtpHandler = asyncHandler(async (req, res) => {
   const email = req.body.email.toLowerCase().trim();
-  await verifyOtp(email, req.body.otp, 'WEB');
+  await verifyOtp(email, req.body.otp, "WEB");
 
   const user = await ensureUser(email);
   user.isVerified = true;
-  const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+  const superEmail = (process.env.SUPER_ADMIN_EMAIL || "").toLowerCase().trim();
   if (superEmail && user.email === superEmail) {
     user.isSuperAdmin = true;
   }
@@ -59,9 +103,9 @@ const verifyOtpHandler = asyncHandler(async (req, res) => {
 
   await logAudit({
     organizationId: organization?._id || null,
-    actorType: user.isSuperAdmin ? 'SUPER_ADMIN' : 'USER',
+    actorType: user.isSuperAdmin ? "SUPER_ADMIN" : "USER",
     actorId: user._id,
-    action: 'WEB_LOGIN',
+    action: "WEB_LOGIN",
     meta: { email: user.email },
   });
 
@@ -81,13 +125,13 @@ const verifyOtpHandler = asyncHandler(async (req, res) => {
         : null,
       role: membership?.role || null,
     },
-    'Logged in'
+    "Logged in",
   );
 });
 
 const logout = asyncHandler(async (req, res) => {
   res.clearCookie(cookieName());
-  return send(res, 200, null, 'Logged out');
+  return send(res, 200, null, "Logged out");
 });
 
 module.exports = {

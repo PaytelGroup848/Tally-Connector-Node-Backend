@@ -22,4 +22,6 @@ const planSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+planSchema.index({ isActive: 1, createdAt: 1 }, { background: true });
+
 module.exports = mongoose.model("Plan", planSchema);

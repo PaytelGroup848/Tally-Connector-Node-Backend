@@ -22,5 +22,9 @@ const otpTokenSchema = new mongoose.Schema(
 );
 
 otpTokenSchema.index({ email: 1, context: 1 });
+otpTokenSchema.index(
+  { email: 1, context: 1, createdAt: -1 },
+  { background: true }
+);
 
 module.exports = mongoose.model("OtpToken", otpTokenSchema);

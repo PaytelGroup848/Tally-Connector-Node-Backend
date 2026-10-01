@@ -20,4 +20,13 @@ const auditLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+auditLogSchema.index(
+  { organizationId: 1, createdAt: -1 },
+  { background: true }
+);
+auditLogSchema.index(
+  { organizationId: 1, action: 1, createdAt: -1 },
+  { background: true }
+);
+
 module.exports = mongoose.model('AuditLog', auditLogSchema);

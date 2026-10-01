@@ -4,11 +4,12 @@ const { requirePermission } = require("../middlewares/rbac.middleware");
 const { PERMISSIONS } = require("../constants/permissions");
 const ctrl = require("../controllers/data.controller");
 const { getDashboard } = require("../controllers/dashboard.controller");
+const companyAccessGuard = require("../middlewares/companyAccess.middleware");
 
 const router = express.Router();
 
 router.use(webAuth);
-
+router.param("id", (req, res, next) => companyAccessGuard(req, res, next));
 router.get(
   "/:id/ledgers",
   requirePermission(PERMISSIONS.LEDGER_READ),

@@ -8,7 +8,7 @@ const DEFAULT_MESSAGE =
 const getTemplate = asyncHandler(async (req, res) => {
   let template = await ReminderTemplate.findOne({
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!template) {
     template = { message: DEFAULT_MESSAGE };
   }

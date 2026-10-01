@@ -31,5 +31,9 @@ supplierSchema.index(
   { organizationId: 1, companyId: 1, tallyExternalId: 1 },
   { unique: true }
 );
+supplierSchema.index(
+  { organizationId: 1, companyId: 1, name: 1 },
+  { background: true }
+);
 
 module.exports = mongoose.model('Supplier', supplierSchema);

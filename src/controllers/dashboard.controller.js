@@ -12,7 +12,7 @@ const scopedCompany = async (req) => {
   const company = await Company.findOne({
     _id: req.params.id,
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!company)
     throw new ApiError(404, "Company not found", ERROR_CODES.NOT_FOUND);
   return company;

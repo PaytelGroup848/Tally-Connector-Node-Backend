@@ -4,6 +4,9 @@ const OrganizationMember = require("../models/OrganizationMember");
 const ApiError = require("../utils/ApiError");
 const { ERROR_CODES } = require("../constants/permissions");
 const { resolveForMember } = require("../services/permission.service");
+const {
+  assertMemberLoginAllowed,
+} = require("../services/scheduleAccess.service");
 
 const extractBearer = (req) => {
   const header = req.headers.authorization || "";
@@ -27,6 +30,13 @@ const webAuth = async (req, res, next) => {
     if (!user) {
       throw new ApiError(401, "User not found", ERROR_CODES.UNAUTHORIZED);
     }
+    if (user.isSuspended) {
+      throw new ApiError(
+        403,
+        "Your account has been suspended by CtrlBooks",
+        ERROR_CODES.ACCOUNT_SUSPENDED,
+      );
+    }
 
     const memberships = await OrganizationMember.find({
       userId: user._id,
@@ -40,6 +50,9 @@ const webAuth = async (req, res, next) => {
     if (req.organizationId) {
       const resolved = await resolveForMember(user._id, req.organizationId);
       req.authContext = resolved;
+      if (resolved.role !== "OWNER") {
+        assertMemberLoginAllowed(resolved.member);
+      }
     } else {
       req.authContext = {
         member: null,

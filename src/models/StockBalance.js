@@ -31,5 +31,29 @@ stockBalanceSchema.index(
   { organizationId: 1, companyId: 1, tallyExternalId: 1 },
   { unique: true },
 );
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, itemName: 1 },
+  { background: true },
+);
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, godown: 1 },
+  { background: true },
+);
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, batch: 1 },
+  { background: true },
+);
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, itemName: 1 },
+  { background: true },
+);
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, godown: 1 },
+  { background: true },
+);
+stockBalanceSchema.index(
+  { organizationId: 1, companyId: 1, batch: 1 },
+  { background: true },
+);
 
 module.exports = mongoose.model("StockBalance", stockBalanceSchema);

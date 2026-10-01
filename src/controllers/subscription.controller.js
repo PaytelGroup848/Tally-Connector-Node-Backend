@@ -13,7 +13,7 @@ const getMine = asyncHandler(async (req, res) => {
   if (!subscription) {
     return send(res, 200, { subscription: null }, 'No subscription');
   }
-  const plan = await Plan.findById(subscription.planId);
+  const plan = await Plan.findById(subscription.planId).lean();
   return send(
     res,
     200,

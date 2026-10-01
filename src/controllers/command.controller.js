@@ -21,7 +21,7 @@ const create = asyncHandler(async (req, res) => {
   const company = await Company.findOne({
     _id: req.params.id,
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!company) throw new ApiError(404, 'Company not found', ERROR_CODES.NOT_FOUND);
   if (!company.linkedByConnectorId) {
     throw new ApiError(400, 'Tally company is not linked', ERROR_CODES.TALLY_LINK_REQUIRED);
@@ -56,7 +56,7 @@ const getById = asyncHandler(async (req, res) => {
   const command = await Command.findOne({
     _id: req.params.id,
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!command) throw new ApiError(404, 'Command not found', ERROR_CODES.COMMAND_NOT_FOUND);
   return send(
     res,
@@ -119,7 +119,7 @@ const list = asyncHandler(async (req, res) => {
   const skip = (pageNum - 1) * limitNum;
 
   const [items, total] = await Promise.all([
-    Command.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+    Command.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
     Command.countDocuments(filter),
   ]);
 
@@ -169,7 +169,8 @@ const poll = asyncHandler(async (req, res) => {
     status: 'PENDING',
   })
     .sort({ createdAt: 1 })
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   const ids = commands.map((c) => c._id);
   if (ids.length) {

@@ -706,3 +706,31 @@ Once a Command is `DONE`, the real record also appears in the synced data APIs (
 - **Use case:** Remove a not-yet-synced My Entry. Only `PENDING` commands can be cancelled (`SENT` means the connector already picked it up).
 - **Success `200`:** `null`
 - **Errors:** `COMMAND_NOT_FOUND`, `CONFLICT` (status is not `PENDING`), `FORBIDDEN`, `SUBSCRIPTION_EXPIRED`
+
+
+
+
+
+1. Org Admin → Settings → "E-Way Bill Setup"
+   apna GSTIN + GSP username/password (ya API key) enter karta hai
+   → encrypted store hota hai backend me (per-organization)
+
+2. User → "My eWay Bills" → "+ Generate"
+   → ek existing Sales Invoice select karta hai (jo already synced/created hai)
+   → transport details fill karta hai (vehicle no., transporter name/GSTIN, 
+     distance, transport mode) — ye Tally se nahi aata, manually enter hota hai
+
+3. Backend → GSP API ko call karta hai (org ke apne GSTIN credentials se)
+   → GSP → NIC (government) → EWB Number + QR code + Valid-upto milta hai
+
+4. Backend save karta hai (EwayBill collection) + QR image generate karta hai
+
+5. Backend ek COMMAND create karta hai (jaisa "My Entries" me banaya tha) 
+   taaki Connector isi EWB number ko wapas Tally me likh de 
+   (Tally ka voucher "compliant" dikhna chahiye, EWB number ke saath)
+
+6. Connector poll karega command, Tally me EWB details save karega, 
+   result wapas post karega
+
+7. GUI pe "My eWay Bills" list dikhegi — EWB Number, QR code, Valid Till, 
+   Print button

@@ -21,5 +21,6 @@ const connectorSchema = new mongoose.Schema(
 );
 
 connectorSchema.index({ organizationId: 1, deviceId: 1 }, { unique: true });
+connectorSchema.index({ lastHeartbeatAt: -1 }, { background: true });
 
 module.exports = mongoose.model('Connector', connectorSchema);

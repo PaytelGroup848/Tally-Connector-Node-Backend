@@ -10,12 +10,13 @@ const StockBalance = require("../models/StockBalance");
 const Voucher = require("../models/Voucher");
 const VoucherLine = require("../models/VoucherLine");
 const { default: mongoose } = require("mongoose");
+const { withPartyContact } = require("../utils/partyContact");
 
 const scopedCompany = async (req) => {
   const company = await Company.findOne({
     _id: req.params.id,
     organizationId: req.organizationId,
-  });
+  }).lean();
   if (!company)
     throw new ApiError(404, "Company not found", ERROR_CODES.NOT_FOUND);
   return company;
@@ -82,7 +83,7 @@ const listLedgers = asyncHandler(async (req, res) => {
   };
   if (req.query.q) filter.name = new RegExp(req.query.q, "i");
   const [items, total] = await Promise.all([
-    Ledger.find(filter).sort({ name: 1 }).skip(skip).limit(limit),
+    Ledger.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean(),
     Ledger.countDocuments(filter),
   ]);
   return send(res, 200, { items, total, page, limit }, "Ledgers");
@@ -94,10 +95,20 @@ const listCustomers = asyncHandler(async (req, res) => {
   const filter = { organizationId: req.organizationId, companyId: company._id };
   if (req.query.q) filter.name = new RegExp(req.query.q, "i");
   const [items, total] = await Promise.all([
-    Customer.find(filter).sort({ name: 1 }).skip(skip).limit(limit),
+    Customer.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean(),
     Customer.countDocuments(filter),
   ]);
-  return send(res, 200, { items, total, page, limit }, "Customers");
+  return send(
+    res,
+    200,
+    {
+      items: items.map((item) => ({ ...item, ...withPartyContact(item) })),
+      total,
+      page,
+      limit,
+    },
+    "Customers",
+  );
 });
 
 const listSuppliers = asyncHandler(async (req, res) => {
@@ -106,10 +117,20 @@ const listSuppliers = asyncHandler(async (req, res) => {
   const filter = { organizationId: req.organizationId, companyId: company._id };
   if (req.query.q) filter.name = new RegExp(req.query.q, "i");
   const [items, total] = await Promise.all([
-    Supplier.find(filter).sort({ name: 1 }).skip(skip).limit(limit),
+    Supplier.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean(),
     Supplier.countDocuments(filter),
   ]);
-  return send(res, 200, { items, total, page, limit }, "Suppliers");
+  return send(
+    res,
+    200,
+    {
+      items: items.map((item) => ({ ...item, ...withPartyContact(item) })),
+      total,
+      page,
+      limit,
+    },
+    "Suppliers",
+  );
 });
 
 const listStock = asyncHandler(async (req, res) => {
@@ -118,7 +139,7 @@ const listStock = asyncHandler(async (req, res) => {
   const filter = { organizationId: req.organizationId, companyId: company._id };
   if (req.query.q) filter.itemName = new RegExp(req.query.q, "i");
   const [items, total] = await Promise.all([
-    StockBalance.find(filter).sort({ itemName: 1 }).skip(skip).limit(limit),
+    StockBalance.find(filter).sort({ itemName: 1 }).skip(skip).limit(limit).lean(),
     StockBalance.countDocuments(filter),
   ]);
   return send(res, 200, { items, total, page, limit }, "Stock");
@@ -135,7 +156,7 @@ const listVouchers = asyncHandler(async (req, res) => {
     if (req.query.to) filter.date.$lte = new Date(req.query.to);
   }
   const [items, total] = await Promise.all([
-    Voucher.find(filter).sort({ date: -1 }).skip(skip).limit(limit),
+    Voucher.find(filter).sort({ date: -1 }).skip(skip).limit(limit).lean(),
     Voucher.countDocuments(filter),
   ]);
   return send(res, 200, { items, total, page, limit }, "Vouchers");
@@ -1140,7 +1161,7 @@ const listParties = asyncHandler(async (req, res) => {
   const [parties, total] = await Promise.all([
     Customer.find(filter)
       .select(
-        "_id tallyExternalId name email gstin phone address openingBalance closingBalance creditLimit creditDays createdAt updatedAt",
+        "_id tallyExternalId name email gstin phone address openingBalance closingBalance creditLimit creditDays createdAt updatedAt raw",
       )
       .sort({ name: 1, _id: 1 })
       .skip(skip)
@@ -1195,6 +1216,7 @@ const listParties = asyncHandler(async (req, res) => {
 
   const items = parties.map((party) => {
     const normalizedName = (party.name || "").trim().toLowerCase();
+    const contact = withPartyContact(party);
 
     return {
       _id: party._id,
@@ -1208,10 +1230,10 @@ const listParties = asyncHandler(async (req, res) => {
 
       closingBalance: party.closingBalance ?? 0,
 
-      email: party.email || "",
-      gstin: party.gstin || "",
-      phone: party.phone || "",
-      address: party.address || "",
+      email: contact.email,
+      gstin: contact.gstin,
+      phone: contact.phone,
+      address: contact.address,
 
       createdAt: party.createdAt,
       updatedAt: party.updatedAt,

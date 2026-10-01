@@ -24,10 +24,32 @@ router.patch(
   validate,
   ctrl.changeRole,
 );
+router.patch(
+  "/:id/modules",
+  requireRolePermission(PERMISSIONS.MEMBER_MANAGE),
+  ctrl.modulesValidators,
+  validate,
+  ctrl.updateModules,
+);
 router.delete(
   "/:id",
   requireRolePermission(PERMISSIONS.MEMBER_MANAGE),
   ctrl.remove,
+);
+
+router.patch(
+  "/:id/suspend",
+  requireRolePermission(PERMISSIONS.MEMBER_MANAGE),
+  ctrl.suspendValidators,
+  validate,
+  ctrl.toggleSuspend,
+);
+router.patch(
+  "/:id/schedule",
+  requireRolePermission(PERMISSIONS.MEMBER_MANAGE),
+  ctrl.scheduleValidators,
+  validate,
+  ctrl.updateSchedule,
 );
 
 module.exports = router;

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
@@ -12,8 +12,11 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: { type: Boolean, default: false },
     isSuperAdmin: { type: Boolean, default: false },
+    isSuspended: { type: Boolean, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-module.exports = mongoose.model('User', userSchema);
+userSchema.index({ createdAt: -1 }, { background: true });
+
+module.exports = mongoose.model("User", userSchema);

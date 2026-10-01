@@ -17,5 +17,9 @@ const companySchema = new mongoose.Schema(
 );
 
 companySchema.index({ organizationId: 1, tallyCompanyGuid: 1 }, { unique: true });
+companySchema.index(
+  { organizationId: 1, isActive: 1 },
+  { background: true }
+);
 
 module.exports = mongoose.model('Company', companySchema);

@@ -34,5 +34,21 @@ ledgerSchema.index(
   { organizationId: 1, companyId: 1, tallyExternalId: 1 },
   { unique: true }
 );
+ledgerSchema.index(
+  { organizationId: 1, companyId: 1, group: 1 },
+  { background: true }
+);
+ledgerSchema.index(
+  { organizationId: 1, companyId: 1, parent: 1 },
+  { background: true }
+);
+ledgerSchema.index(
+  { organizationId: 1, companyId: 1, name: 1 },
+  { background: true }
+);
+ledgerSchema.index(
+  { organizationId: 1, companyId: 1, ledgerType: 1, name: 1 },
+  { background: true }
+);
 
 module.exports = mongoose.model('Ledger', ledgerSchema);

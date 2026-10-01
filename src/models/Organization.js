@@ -8,4 +8,6 @@ const organizationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+organizationSchema.index({ createdAt: -1 }, { background: true });
+
 module.exports = mongoose.model('Organization', organizationSchema);

@@ -14,9 +14,9 @@ const getMe = asyncHandler(async (req, res) => {
   if (!req.organizationId) {
     throw new ApiError(404, "Organization not found", ERROR_CODES.NOT_FOUND);
   }
-  const organization = await Organization.findById(req.organizationId);
+  const organization = await Organization.findById(req.organizationId).lean();
   const subscription = await getOrExpireSubscription(req.organizationId);
-  const plan = subscription ? await Plan.findById(subscription.planId) : null;
+  const plan = subscription ? await Plan.findById(subscription.planId).lean() : null;
   const ctx = req.authContext || {};
 
   return send(
@@ -35,6 +35,7 @@ const getMe = asyncHandler(async (req, res) => {
       },
       role: ctx.role,
       permissions: ctx.permissions || [],
+      allowedModules: ctx.member?.allowedModules || null,
       subscription: subscription
         ? {
             id: subscription._id,
@@ -80,5 +81,7 @@ const updateMe = asyncHandler(async (req, res) => {
     "Updated",
   );
 });
+
+
 
 module.exports = { getMe, updateMe, updateValidators };

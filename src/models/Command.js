@@ -32,5 +32,9 @@ const commandSchema = new mongoose.Schema(
 );
 
 commandSchema.index({ organizationId: 1, status: 1, createdAt: 1 });
+commandSchema.index(
+  { organizationId: 1, companyId: 1, type: 1, status: 1, createdAt: -1 },
+  { background: true }
+);
 
 module.exports = mongoose.model('Command', commandSchema);
