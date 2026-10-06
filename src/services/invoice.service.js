@@ -1,14 +1,24 @@
 const Invoice = require("../models/Invoice");
+const Counter = require("../models/Counter");
 
+/**
+ * Generate next invoice number in Ctrl-<year>-<seq> format.
+ * Uses atomic Counter collection so concurrent requests never collide.
+ */
 const generateInvoiceNumber = async () => {
   const year = new Date().getFullYear();
+  const key = `invoice-${year}`;
 
-  const count = await Invoice.countDocuments({
-    invoiceNumber: new RegExp(`^CLD-${year}-`),
-  });
+  // Atomic $inc — safe under concurrent calls
+  const counter = await Counter.findOneAndUpdate(
+    { _id: key },
+    { $inc: { seq: 1 } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
 
-  return `Ctrl-${year}-${String(count + 1).padStart(4, "0")}`;
+  return `Ctrl-${year}-${String(counter.seq).padStart(4, "0")}`;
 };
+
 
 const createSubscriptionInvoice = async ({
   organizationId,
@@ -26,16 +36,9 @@ const createSubscriptionInvoice = async ({
   billingTo = {},
   seller = {},
 }) => {
-  // Prevent duplicate invoice if Razorpay verify API is called twice
-  const existing = await Invoice.findOne({
-    razorpayPaymentId: paymentId,
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  const invoiceNumber = await generateInvoiceNumber();
+  // Idempotency: same Razorpay payment should never create 2 invoices
+  const existing = await Invoice.findOne({ razorpayPaymentId: paymentId });
+  if (existing) return existing;
 
   const items = [
     {
@@ -71,50 +74,64 @@ const createSubscriptionInvoice = async ({
     }
   }
 
-  const invoice = await Invoice.create({
-    organizationId,
-    userId,
+  const MAX_RETRIES = 5;
+  let lastError;
 
-    subscriptionId: subscription._id,
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const invoiceNumber = await generateInvoiceNumber();
 
-    invoiceNumber,
+      const invoice = await Invoice.create({
+        organizationId,
+        userId,
+        subscriptionId: subscription._id,
+        invoiceNumber,
+        invoiceDate: new Date(),
+        paymentDate: new Date(),
+        status: "PAID",
+        currency: order.currency || "INR",
+        subtotal,
+        gstPercent,
+        gstAmount,
+        totalAmount,
+        razorpayOrderId: order.id,
+        razorpayPaymentId: paymentId,
+        plan: {
+          id: plan._id,
+          name: plan.name,
+          durationMonths,
+          extraSeats,
+        },
+        billingTo,
+        seller,
+        items,
+        metadata: {
+          razorpayOrderId: order.id,
+          razorpayPaymentId: paymentId,
+        },
+      });
 
-    invoiceDate: new Date(),
-    paymentDate: new Date(),
+      return invoice;
+    } catch (err) {
+      // Duplicate invoiceNumber → retry with next number
+      if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
+        lastError = err;
+        continue;
+      }
 
-    status: "PAID",
+      // Duplicate razorpayPaymentId → another concurrent call already created it
+      if (err.code === 11000 && err.keyPattern?.razorpayPaymentId) {
+        return await Invoice.findOne({ razorpayPaymentId: paymentId });
+      }
 
-    currency: order.currency || "INR",
+      throw err;
+    }
+  }
 
-    subtotal,
-    gstPercent,
-    gstAmount,
-    totalAmount,
-
-    razorpayOrderId: order.id,
-    razorpayPaymentId: paymentId,
-
-    plan: {
-      id: plan._id,
-      name: plan.name,
-      durationMonths,
-      extraSeats,
-    },
-
-    billingTo,
-    seller,
-
-    items,
-
-    metadata: {
-      razorpayOrderId: order.id,
-      razorpayPaymentId: paymentId,
-    },
-  });
-
-  return invoice;
+  throw lastError;
 };
 
 module.exports = {
   createSubscriptionInvoice,
+  generateInvoiceNumber,
 };
