@@ -1,15 +1,12 @@
 const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 
-/**
- * Generate next invoice number in Ctrl-<year>-<seq> format.
- * Uses atomic Counter collection so concurrent requests never collide.
- */
+
 const generateInvoiceNumber = async () => {
   const year = new Date().getFullYear();
   const key = `invoice-${year}`;
 
-  // Atomic $inc — safe under concurrent calls
+
   const counter = await Counter.findOneAndUpdate(
     { _id: key },
     { $inc: { seq: 1 } },
@@ -36,7 +33,7 @@ const createSubscriptionInvoice = async ({
   billingTo = {},
   seller = {},
 }) => {
-  // Idempotency: same Razorpay payment should never create 2 invoices
+
   const existing = await Invoice.findOne({ razorpayPaymentId: paymentId });
   if (existing) return existing;
 
