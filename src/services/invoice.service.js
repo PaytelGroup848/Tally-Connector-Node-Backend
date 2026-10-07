@@ -1,11 +1,9 @@
 const Invoice = require("../models/Invoice");
 const Counter = require("../models/Counter");
 
-
 const generateInvoiceNumber = async () => {
   const year = new Date().getFullYear();
   const key = `invoice-${year}`;
-
 
   const counter = await Counter.findOneAndUpdate(
     { _id: key },
@@ -15,7 +13,6 @@ const generateInvoiceNumber = async () => {
 
   return `Ctrl-${year}-${String(counter.seq).padStart(4, "0")}`;
 };
-
 
 const createSubscriptionInvoice = async ({
   organizationId,
@@ -33,7 +30,6 @@ const createSubscriptionInvoice = async ({
   billingTo = {},
   seller = {},
 }) => {
-
   const existing = await Invoice.findOne({ razorpayPaymentId: paymentId });
   if (existing) return existing;
 
@@ -110,13 +106,11 @@ const createSubscriptionInvoice = async ({
 
       return invoice;
     } catch (err) {
-      // Duplicate invoiceNumber → retry with next number
       if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
         lastError = err;
         continue;
       }
 
-      // Duplicate razorpayPaymentId → another concurrent call already created it
       if (err.code === 11000 && err.keyPattern?.razorpayPaymentId) {
         return await Invoice.findOne({ razorpayPaymentId: paymentId });
       }
