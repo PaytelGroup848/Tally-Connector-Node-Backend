@@ -51,7 +51,10 @@ const batchValidators = [
 const completeValidators = [body("syncJobId").isMongoId()];
 
 const assertCompany = async (organizationId, companyId) => {
-  const company = await Company.findOne({ _id: companyId, organizationId }).lean();
+  const company = await Company.findOne({
+    _id: companyId,
+    organizationId,
+  }).lean();
   if (!company)
     throw new ApiError(404, "Company not found", ERROR_CODES.NOT_FOUND);
   return company;
@@ -121,9 +124,9 @@ const mapRecord = (entityType, record, ctx) => {
         ...base,
         name: record.name,
         gstin: contact.gstin || record.gstin || "",
-        email: contact.email,
-        phone: contact.phone,
-        address: contact.address,
+        email: contact.email || record.email || "",
+        phone: contact.phone || record.phone || "",
+        address: contact.address || record.address || "",
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
 
@@ -218,17 +221,31 @@ const executeBulkWrite = async (Model, operations, onWriteError) => {
   let failed = 0;
   if (!operations.length) return { upserted, failed };
 
+  console.log(
+    `    executeBulkWrite: model=${Model.modelName} ops=${operations.length} chunks=${Math.ceil(operations.length / BULK_WRITE_CHUNK_SIZE)}`,
+  );
+
   for (let i = 0; i < operations.length; i += BULK_WRITE_CHUNK_SIZE) {
     const chunk = operations.slice(i, i + BULK_WRITE_CHUNK_SIZE);
+    const __chunkStart = Date.now(); // ⭐ ADD THIS LINE
+
     try {
       const result = await Model.bulkWrite(chunk, { ordered: false });
       upserted += bulkSuccessCount(result);
+
+      console.log(
+        `      Chunk ${i / BULK_WRITE_CHUNK_SIZE + 1}: ${chunk.length} ops in ${Date.now() - __chunkStart}ms`,
+      );
     } catch (err) {
       const result = err.result;
       if (!result && !err.writeErrors) throw err;
       upserted += bulkSuccessCount(result);
       const writeErrors = err.writeErrors || [];
       failed += writeErrors.length;
+
+      console.log(
+        `        Chunk ${i / BULK_WRITE_CHUNK_SIZE + 1} FAILED: ${writeErrors.length} write errors in ${Date.now() - __chunkStart}ms`,
+      );
       if (onWriteError) {
         for (const we of writeErrors) {
           await onWriteError(we, i + (we.index ?? 0));
@@ -263,6 +280,13 @@ const partyUpsertOpsFromLedger = (ledgerDoc) => {
     tallyExternalId: ledgerDoc.tallyExternalId,
   };
   const $set = partySetFromLedger(ledgerDoc);
+
+  console.log(`    partyUpsertOpsFromLedger check for: ${ledgerDoc.name}`);
+  console.log(`      isCustomerLedger: ${isCustomerLedger(ledgerDoc)}`);
+  console.log(`      isSupplierLedger: ${isSupplierLedger(ledgerDoc)}`);
+  console.log(
+    `      ledgerDoc.parent: ${ledgerDoc.parent}, group: ${ledgerDoc.group}, type: ${ledgerDoc.ledgerType}`,
+  );
 
   if (isCustomerLedger(ledgerDoc)) {
     customerOps.push({
@@ -303,7 +327,11 @@ const partyUpsertOpsFromLedger = (ledgerDoc) => {
   return { customerOps, supplierOps };
 };
 
-const loadVouchersByExternalIds = async (organizationId, companyId, externalIds) => {
+const loadVouchersByExternalIds = async (
+  organizationId,
+  companyId,
+  externalIds,
+) => {
   const byExternalId = new Map();
   for (let i = 0; i < externalIds.length; i += BULK_WRITE_CHUNK_SIZE) {
     const chunk = externalIds.slice(i, i + BULK_WRITE_CHUNK_SIZE);
@@ -337,7 +365,12 @@ const mapBillAllocation = (line, voucher, ctx) => ({
 });
 
 const batch = asyncHandler(async (req, res) => {
+  const __batchStart = Date.now();
   const { syncJobId, entityType, records } = req.body;
+
+  console.log(
+    ` [BATCH START] entityType=${entityType} records=${records.length} jobId=${syncJobId} time=${new Date().toISOString()}`,
+  );
   const job = await SyncJob.findOne({
     _id: syncJobId,
     organizationId: req.organizationId,
@@ -404,6 +437,10 @@ const batch = asyncHandler(async (req, res) => {
         throw new Error("tallyExternalId is required");
       }
 
+      if (entityType === "LEDGER" && records.indexOf(record) < 10) {
+        console.log(` [Sample ${records.indexOf(record) + 1}] ${record.name}`);
+      }
+
       if (entityType === "VOUCHER" && Array.isArray(record.lines)) {
         const doc = mapRecord("VOUCHER", record, ctx);
         voucherOps.push({
@@ -443,10 +480,26 @@ const batch = asyncHandler(async (req, res) => {
 
       if (entityType === "LEDGER") {
         const partyOps = partyUpsertOpsFromLedger(doc);
+        const isCustomer = partyOps.customerOps.length > 0;
+        const isSupplier = partyOps.supplierOps.length > 0;
+        console.log(
+          `   🏷️  ${record.name} → Customer: ${isCustomer} | Supplier: ${isSupplier}`,
+        );
+
+        // ⭐ ADD THIS
+        console.log(
+          `      customerOps returned: ${partyOps.customerOps.length}, supplierOps returned: ${partyOps.supplierOps.length}`,
+        );
+
         for (const op of partyOps.customerOps) {
           customerOps.push(op);
           customerPayloads.push(record);
         }
+        // ⭐ ADD THIS
+        console.log(
+          `      customerOps array now: ${customerOps.length}, supplierOps array now: ${supplierOps.length}`,
+        );
+
         for (const op of partyOps.supplierOps) {
           supplierOps.push(op);
           supplierPayloads.push(record);
@@ -538,11 +591,7 @@ const batch = asyncHandler(async (req, res) => {
       }
     }
 
-    await executeBulkWrite(
-      VoucherLine,
-      lineOps,
-      onOpWriteError(linePayloads),
-    );
+    await executeBulkWrite(VoucherLine, lineOps, onOpWriteError(linePayloads));
 
     await executeBulkWrite(
       BillAllocation,
@@ -560,21 +609,37 @@ const batch = asyncHandler(async (req, res) => {
     upserted += modelWrite.upserted;
   }
 
+  console.log(` [BATCH SUMMARY] entityType=${entityType}`);
+  console.log(`   Total records: ${records.length}`);
+  console.log(`   modelOps: ${modelOps.length}`);
+  console.log(`   voucherOps: ${voucherOps.length}`);
+  console.log(`   customerOps: ${customerOps.length}`);
+  console.log(`   supplierOps: ${supplierOps.length}`);
+  console.log(`   failed (during parse): ${failed}`);
+
+  console.log(
+    ` [BEFORE WRITE] customerOps.length=${customerOps.length}, supplierOps.length=${supplierOps.length}`,
+  );
+
   if (customerOps.length) {
-    await executeBulkWrite(
+    console.log(`    Writing ${customerOps.length} customers...`);
+    const result = await executeBulkWrite(
       Customer,
       customerOps,
       onOpWriteError(customerPayloads),
     );
+    console.log(`    Customers write result:`, result);
   }
+
   if (supplierOps.length) {
-    await executeBulkWrite(
+    console.log(`    Writing ${supplierOps.length} suppliers...`);
+    const result = await executeBulkWrite(
       Supplier,
       supplierOps,
       onOpWriteError(supplierPayloads),
     );
+    console.log(`    Suppliers write result:`, result);
   }
-
   await SyncCheckpoint.findOneAndUpdate(
     {
       connectorId: req.connector._id,
@@ -589,6 +654,10 @@ const batch = asyncHandler(async (req, res) => {
       },
     },
     { upsert: true },
+  );
+
+  console.log(
+    ` [BATCH DONE] entityType=${entityType} upserted=${upserted} failed=${failed} totalTime=${Date.now() - __batchStart}`,
   );
 
   return send(res, 200, { upserted, failed, entityType }, "Batch processed");
