@@ -6,6 +6,7 @@ const routes = require("./routes");
 const errorHandler = require("./middlewares/errorHandler.middleware");
 const ApiError = require("./utils/ApiError");
 const { ERROR_CODES } = require("./constants/permissions");
+const path = require("path");
 
 const app = express();
 
@@ -21,6 +22,19 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static("public"));
+
+app.use(
+  "/api/uploads",
+  (req, res, next) => {
+    res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(path.join(process.cwd(), "uploads"), {
+    maxAge: "7d",
+    index: false,
+    dotfiles: "deny",
+  }),
+);
 
 app.use("/api", routes);
 

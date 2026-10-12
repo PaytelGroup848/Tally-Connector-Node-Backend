@@ -32,6 +32,7 @@ router.use("/plans", planRoutes);
 router.use("/subscriptions", subscriptionRoutes);
 router.use("/organizations", organizationRoutes);
 router.use("/members", memberRoutes);
+router.use("/companies", require("./companySettings.routes"));
 router.use("/companies", companyRoutes);
 router.use("/companies", dataRoutes);
 router.get(
