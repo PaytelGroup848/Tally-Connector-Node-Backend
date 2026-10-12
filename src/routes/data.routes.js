@@ -5,8 +5,23 @@ const { PERMISSIONS } = require("../constants/permissions");
 const ctrl = require("../controllers/data.controller");
 const { getDashboard } = require("../controllers/dashboard.controller");
 const companyAccessGuard = require("../middlewares/companyAccess.middleware");
-
+const rateLimit = require("express-rate-limit");
+const validate = require("../middlewares/validate.middleware");
+const pdfCtrl = require("../controllers/voucherPdf.controller");
 const router = express.Router();
+
+const pdfRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => String(req.user._id),
+  message: {
+    success: false,
+    statusCode: 429,
+    message: "Too many PDF requests",
+    code: "RATE_LIMITED",
+    data: null,
+  },
+});
 
 router.use(webAuth);
 router.param("id", (req, res, next) => companyAccessGuard(req, res, next));
@@ -14,6 +29,15 @@ router.get(
   "/:id/ledgers",
   requirePermission(PERMISSIONS.LEDGER_READ),
   ctrl.listLedgers,
+);
+
+router.get(
+  "/:id/vouchers/:voucherId/pdf",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  pdfRateLimit,
+  pdfCtrl.voucherPdfValidators,
+  validate,
+  pdfCtrl.downloadVoucherPdf,
 );
 
 router.get(

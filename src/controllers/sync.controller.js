@@ -165,19 +165,32 @@ const mapRecord = (entityType, record, ctx) => {
         amount: record.amount || 0,
         narration: record.narration || "",
       };
-    case "VOUCHER_LINE":
+    case "VOUCHER_LINE": {
+      const amount = Math.abs(Number(record.amount) || 0);
+      const isDeemedPositive = Boolean(record.isDeemedPositive);
+
+      // Tally convention: isDeemedPositive=true → Debit, false → Credit
+      const debit = isDeemedPositive ? amount : 0;
+      const credit = !isDeemedPositive ? amount : 0;
+
+      // Inventory entries check karo (agar Tally ne bheja hai)
+      const inv =
+        Array.isArray(record.inventoryEntries) && record.inventoryEntries[0];
+
       return {
         ...base,
         voucherId: record.voucherId,
         ledgerName: record.ledgerName || "",
         ledgerTallyExternalId: record.ledgerTallyExternalId || "",
-        debit: record.debit || 0,
-        credit: record.credit || 0,
-        itemName: record.itemName || "",
-        itemTallyExternalId: record.itemTallyExternalId || "",
-        qty: record.qty || 0,
-        rate: record.rate || 0,
+        debit,
+        credit,
+        itemName: inv?.itemName || record.itemName || "",
+        itemTallyExternalId:
+          inv?.itemTallyExternalId || record.itemTallyExternalId || "",
+        qty: inv?.qty || record.qty || 0,
+        rate: inv?.rate || record.rate || 0,
       };
+    }
     case "STOCK":
       return {
         ...base,

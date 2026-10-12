@@ -161,7 +161,11 @@ const profileValidators = [
     .customSanitizer(trimmed)
     .matches(/^\d{2}$/)
     .withMessage("State code must be 2 digits"),
-  body("termsAndConditions").optional().isString().isLength({ max: 5000 }),
+  body("termsAndConditions")
+    .optional()
+    .isString()
+    .isLength({ max: 200 })
+    .withMessage("Terms & conditions can be at most 200 characters"),
 ];
 
 const bankRules = (required) => {
