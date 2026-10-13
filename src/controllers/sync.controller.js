@@ -210,7 +210,7 @@ const mapRecord = (entityType, record, ctx) => {
         godown: record.godown || "",
         quantity: record.quantity || 0,
         rate: record.rate || 0,
-        value: record.value || 0,
+        value: Math.abs(Number(record.value) || 0),
       };
     default:
       return base;

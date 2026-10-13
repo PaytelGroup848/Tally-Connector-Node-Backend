@@ -136,12 +136,36 @@ const listSuppliers = asyncHandler(async (req, res) => {
 const listStock = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
   const { page, limit, skip } = paginate(req);
-  const filter = { organizationId: req.organizationId, companyId: company._id };
-  if (req.query.q) filter.itemName = new RegExp(req.query.q, "i");
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+
+    tallyExternalId: { $exists: true, $nin: ["", "None", null] },
+  };
+
+  if (req.query.q) {
+    const regex = getSearchRegex(req.query.q);
+    filter.itemName = regex;
+  }
+
+  if (req.query.godown) {
+    filter.godown = req.query.godown;
+  }
+
+  if (req.query.batch) {
+    filter.batch = req.query.batch;
+  }
+
   const [items, total] = await Promise.all([
-    StockBalance.find(filter).sort({ itemName: 1 }).skip(skip).limit(limit).lean(),
+    StockBalance.find(filter)
+      .sort({ updatedAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
     StockBalance.countDocuments(filter),
   ]);
+
   return send(res, 200, { items, total, page, limit }, "Stock");
 });
 
