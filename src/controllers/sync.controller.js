@@ -272,18 +272,21 @@ const executeBulkWrite = async (Model, operations, onWriteError) => {
   return { upserted, failed };
 };
 
-// ⭐ FIX: pickPartyContact dobara walk nahi karega — mapRecord mein already extract ho chuka
 const partySetFromLedger = (ledgerDoc) => {
+  const contact = pickPartyContact(ledgerDoc.raw || ledgerDoc);
+
   const $set = {
     name: ledgerDoc.name,
-    gstin: ledgerDoc.gstin || "",
+    gstin: contact.gstin || ledgerDoc.gstin || "",
     openingBalance: ledgerDoc.openingBalance || 0,
     closingBalance: ledgerDoc.closingBalance || 0,
     raw: ledgerDoc.raw || {},
   };
-  if (ledgerDoc.email) $set.email = ledgerDoc.email;
-  if (ledgerDoc.phone) $set.phone = ledgerDoc.phone;
-  if (ledgerDoc.address) $set.address = ledgerDoc.address;
+
+  $set.email = contact.email || ledgerDoc.email || "";
+  $set.phone = contact.phone || ledgerDoc.phone || "";
+  $set.address = contact.address || ledgerDoc.address || "";
+
   return $set;
 };
 
@@ -302,13 +305,10 @@ const partyUpsertOpsFromLedger = (ledgerDoc) => {
       updateOne: {
         filter,
         update: {
-          $set,
+          $set, // ⭐ email/phone/address already $set mein hain
           $setOnInsert: {
             creditLimit: null,
             creditDays: null,
-            email: $set.email || "",
-            phone: $set.phone || "",
-            address: $set.address || "",
           },
         },
         upsert: true,
@@ -321,12 +321,8 @@ const partyUpsertOpsFromLedger = (ledgerDoc) => {
       updateOne: {
         filter,
         update: {
-          $set,
-          $setOnInsert: {
-            email: $set.email || "",
-            phone: $set.phone || "",
-            address: $set.address || "",
-          },
+          $set, // ⭐ same
+          $setOnInsert: {},
         },
         upsert: true,
       },
