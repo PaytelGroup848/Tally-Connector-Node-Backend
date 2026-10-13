@@ -50,6 +50,14 @@ const batchValidators = [
 
 const completeValidators = [body("syncJobId").isMongoId()];
 
+// ---------- Debug flag (production mein off rakho) ----------
+const DEBUG_SYNC = process.env.DEBUG_SYNC === "true";
+const SAMPLE_LIMIT = 5;
+
+const dbg = (...args) => {
+  if (DEBUG_SYNC) console.log(...args);
+};
+
 const assertCompany = async (organizationId, companyId) => {
   const company = await Company.findOne({
     _id: companyId,
@@ -78,6 +86,10 @@ const start = asyncHandler(async (req, res) => {
     companyId,
   }).lean();
 
+  console.log(
+    `🚀 [SYNC START] companyId=${companyId} type=${type} syncJobId=${job._id}`,
+  );
+
   return send(
     res,
     200,
@@ -103,6 +115,7 @@ const mapRecord = (entityType, record, ctx) => {
   };
   switch (entityType) {
     case "LEDGER": {
+      // ⭐ FIX: contact extract karo record se (raw walk avoid)
       const contact = pickPartyContact(record);
       return {
         ...base,
@@ -113,9 +126,9 @@ const mapRecord = (entityType, record, ctx) => {
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
         gstin: contact.gstin || record.gstin || "",
-        email: contact.email,
-        phone: contact.phone,
-        address: contact.address,
+        email: contact.email || "",
+        phone: contact.phone || "",
+        address: contact.address || "",
       };
     }
     case "CUSTOMER": {
@@ -129,7 +142,6 @@ const mapRecord = (entityType, record, ctx) => {
         address: contact.address || record.address || "",
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
-
         creditLimit: record.creditLimit ?? null,
         creditDays: record.creditDays ?? null,
       };
@@ -140,9 +152,9 @@ const mapRecord = (entityType, record, ctx) => {
         ...base,
         name: record.name,
         gstin: contact.gstin || record.gstin || "",
-        email: contact.email,
-        phone: contact.phone,
-        address: contact.address,
+        email: contact.email || "",
+        phone: contact.phone || "",
+        address: contact.address || "",
         openingBalance: record.openingBalance || 0,
         closingBalance: record.closingBalance || 0,
       };
@@ -173,7 +185,6 @@ const mapRecord = (entityType, record, ctx) => {
       const debit = isDeemedPositive ? amount : 0;
       const credit = !isDeemedPositive ? amount : 0;
 
-      // Inventory entries check karo (agar Tally ne bheja hai)
       const inv =
         Array.isArray(record.inventoryEntries) && record.inventoryEntries[0];
 
@@ -187,7 +198,7 @@ const mapRecord = (entityType, record, ctx) => {
         itemName: inv?.itemName || record.itemName || "",
         itemTallyExternalId:
           inv?.itemTallyExternalId || record.itemTallyExternalId || "",
-        qty: inv?.qty || record.qty || 0,
+        qty: inv?.quantity || record.qty || 0,
         rate: inv?.rate || record.rate || 0,
       };
     }
@@ -224,8 +235,6 @@ const bulkSuccessCount = (result) => {
   const upsertedCount = Number(result?.upsertedCount ?? result?.nUpserted ?? 0);
   const matchedCount = Number(result?.matchedCount ?? result?.nMatched ?? 0);
   const modifiedCount = Number(result?.modifiedCount ?? result?.nModified ?? 0);
-  // Prefer matched+upserted so unchanged re-syncs still count as successful,
-  // matching the previous findOneAndUpdate increment. Fall back to modified.
   return upsertedCount + (matchedCount || modifiedCount);
 };
 
@@ -234,20 +243,15 @@ const executeBulkWrite = async (Model, operations, onWriteError) => {
   let failed = 0;
   if (!operations.length) return { upserted, failed };
 
-  console.log(
-    `    executeBulkWrite: model=${Model.modelName} ops=${operations.length} chunks=${Math.ceil(operations.length / BULK_WRITE_CHUNK_SIZE)}`,
-  );
-
   for (let i = 0; i < operations.length; i += BULK_WRITE_CHUNK_SIZE) {
     const chunk = operations.slice(i, i + BULK_WRITE_CHUNK_SIZE);
-    const __chunkStart = Date.now(); // ⭐ ADD THIS LINE
+    const __chunkStart = Date.now();
 
     try {
       const result = await Model.bulkWrite(chunk, { ordered: false });
       upserted += bulkSuccessCount(result);
-
-      console.log(
-        `      Chunk ${i / BULK_WRITE_CHUNK_SIZE + 1}: ${chunk.length} ops in ${Date.now() - __chunkStart}ms`,
+      dbg(
+        `      ${Model.modelName} chunk ${i / BULK_WRITE_CHUNK_SIZE + 1}: ${chunk.length} ops in ${Date.now() - __chunkStart}ms`,
       );
     } catch (err) {
       const result = err.result;
@@ -255,9 +259,8 @@ const executeBulkWrite = async (Model, operations, onWriteError) => {
       upserted += bulkSuccessCount(result);
       const writeErrors = err.writeErrors || [];
       failed += writeErrors.length;
-
-      console.log(
-        `        Chunk ${i / BULK_WRITE_CHUNK_SIZE + 1} FAILED: ${writeErrors.length} write errors in ${Date.now() - __chunkStart}ms`,
+      console.error(
+        `      ❌ ${Model.modelName} chunk ${i / BULK_WRITE_CHUNK_SIZE + 1} FAILED: ${writeErrors.length} errors`,
       );
       if (onWriteError) {
         for (const we of writeErrors) {
@@ -269,18 +272,18 @@ const executeBulkWrite = async (Model, operations, onWriteError) => {
   return { upserted, failed };
 };
 
+// ⭐ FIX: pickPartyContact dobara walk nahi karega — mapRecord mein already extract ho chuka
 const partySetFromLedger = (ledgerDoc) => {
-  const contact = pickPartyContact(ledgerDoc);
   const $set = {
     name: ledgerDoc.name,
-    gstin: contact.gstin || ledgerDoc.gstin || "",
+    gstin: ledgerDoc.gstin || "",
     openingBalance: ledgerDoc.openingBalance || 0,
     closingBalance: ledgerDoc.closingBalance || 0,
     raw: ledgerDoc.raw || {},
   };
-  if (contact.email) $set.email = contact.email;
-  if (contact.phone) $set.phone = contact.phone;
-  if (contact.address) $set.address = contact.address;
+  if (ledgerDoc.email) $set.email = ledgerDoc.email;
+  if (ledgerDoc.phone) $set.phone = ledgerDoc.phone;
+  if (ledgerDoc.address) $set.address = ledgerDoc.address;
   return $set;
 };
 
@@ -293,13 +296,6 @@ const partyUpsertOpsFromLedger = (ledgerDoc) => {
     tallyExternalId: ledgerDoc.tallyExternalId,
   };
   const $set = partySetFromLedger(ledgerDoc);
-
-  console.log(`    partyUpsertOpsFromLedger check for: ${ledgerDoc.name}`);
-  console.log(`      isCustomerLedger: ${isCustomerLedger(ledgerDoc)}`);
-  console.log(`      isSupplierLedger: ${isSupplierLedger(ledgerDoc)}`);
-  console.log(
-    `      ledgerDoc.parent: ${ledgerDoc.parent}, group: ${ledgerDoc.group}, type: ${ledgerDoc.ledgerType}`,
-  );
 
   if (isCustomerLedger(ledgerDoc)) {
     customerOps.push({
@@ -381,9 +377,19 @@ const batch = asyncHandler(async (req, res) => {
   const __batchStart = Date.now();
   const { syncJobId, entityType, records } = req.body;
 
+  // ⭐ BATCH START log (always on — important)
   console.log(
-    ` [BATCH START] entityType=${entityType} records=${records.length} jobId=${syncJobId} time=${new Date().toISOString()}`,
+    `📥 [BATCH START] entityType=${entityType} records=${records.length} jobId=${syncJobId}`,
   );
+
+  if (records.length === 0) {
+    console.warn(
+      `⚠️  [BATCH EMPTY] entityType=${entityType} — connector ne 0 records bheje!`,
+    );
+  } else if (DEBUG_SYNC) {
+    dbg(`   Sample[0] keys: ${Object.keys(records[0] || {}).join(", ")}`);
+  }
+
   const job = await SyncJob.findOne({
     _id: syncJobId,
     organizationId: req.organizationId,
@@ -424,6 +430,8 @@ const batch = asyncHandler(async (req, res) => {
 
   let failed = 0;
   let lastExternalId = null;
+  let sampleCount = 0;
+
   const modelOps = [];
   const modelPayloads = [];
   const voucherOps = [];
@@ -444,14 +452,20 @@ const batch = asyncHandler(async (req, res) => {
     });
   };
 
-  for (const record of records) {
+  // ⭐ FIX: index-based loop (records.indexOf nahi)
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
     try {
       if (!record?.tallyExternalId) {
         throw new Error("tallyExternalId is required");
       }
 
-      if (entityType === "LEDGER" && records.indexOf(record) < 10) {
-        console.log(` [Sample ${records.indexOf(record) + 1}] ${record.name}`);
+      // Sample log — sirf pehle SAMPLE_LIMIT records
+      if (sampleCount < SAMPLE_LIMIT) {
+        dbg(
+          `   [Sample ${sampleCount + 1}] ${record.name || record.ledgerName || record.voucherNumber || record.tallyExternalId}`,
+        );
+        sampleCount++;
       }
 
       if (entityType === "VOUCHER" && Array.isArray(record.lines)) {
@@ -474,10 +488,13 @@ const batch = asyncHandler(async (req, res) => {
 
       const voucherId = record.voucherId;
       const doc = mapRecord(entityType, { ...record, voucherId }, ctx);
+
+      // LEDGER ke liye email/phone/address Ledger collection mein save nahi karte
       const persistDoc =
         entityType === "LEDGER"
           ? (({ email, phone, address, ...rest }) => rest)(doc)
           : doc;
+
       modelOps.push({
         updateOne: {
           filter: {
@@ -493,26 +510,10 @@ const batch = asyncHandler(async (req, res) => {
 
       if (entityType === "LEDGER") {
         const partyOps = partyUpsertOpsFromLedger(doc);
-        const isCustomer = partyOps.customerOps.length > 0;
-        const isSupplier = partyOps.supplierOps.length > 0;
-        console.log(
-          `   🏷️  ${record.name} → Customer: ${isCustomer} | Supplier: ${isSupplier}`,
-        );
-
-        // ⭐ ADD THIS
-        console.log(
-          `      customerOps returned: ${partyOps.customerOps.length}, supplierOps returned: ${partyOps.supplierOps.length}`,
-        );
-
         for (const op of partyOps.customerOps) {
           customerOps.push(op);
           customerPayloads.push(record);
         }
-        // ⭐ ADD THIS
-        console.log(
-          `      customerOps array now: ${customerOps.length}, supplierOps array now: ${supplierOps.length}`,
-        );
-
         for (const op of partyOps.supplierOps) {
           supplierOps.push(op);
           supplierPayloads.push(record);
@@ -605,7 +606,6 @@ const batch = asyncHandler(async (req, res) => {
     }
 
     await executeBulkWrite(VoucherLine, lineOps, onOpWriteError(linePayloads));
-
     await executeBulkWrite(
       BillAllocation,
       billOps,
@@ -622,37 +622,28 @@ const batch = asyncHandler(async (req, res) => {
     upserted += modelWrite.upserted;
   }
 
-  console.log(` [BATCH SUMMARY] entityType=${entityType}`);
-  console.log(`   Total records: ${records.length}`);
-  console.log(`   modelOps: ${modelOps.length}`);
-  console.log(`   voucherOps: ${voucherOps.length}`);
-  console.log(`   customerOps: ${customerOps.length}`);
-  console.log(`   supplierOps: ${supplierOps.length}`);
-  console.log(`   failed (during parse): ${failed}`);
-
-  console.log(
-    ` [BEFORE WRITE] customerOps.length=${customerOps.length}, supplierOps.length=${supplierOps.length}`,
-  );
-
   if (customerOps.length) {
-    console.log(`    Writing ${customerOps.length} customers...`);
     const result = await executeBulkWrite(
       Customer,
       customerOps,
       onOpWriteError(customerPayloads),
     );
-    console.log(`    Customers write result:`, result);
+    dbg(
+      `   → ${customerOps.length} customers written, upserted: ${result.upserted}`,
+    );
   }
 
   if (supplierOps.length) {
-    console.log(`    Writing ${supplierOps.length} suppliers...`);
     const result = await executeBulkWrite(
       Supplier,
       supplierOps,
       onOpWriteError(supplierPayloads),
     );
-    console.log(`    Suppliers write result:`, result);
+    dbg(
+      `   → ${supplierOps.length} suppliers written, upserted: ${result.upserted}`,
+    );
   }
+
   await SyncCheckpoint.findOneAndUpdate(
     {
       connectorId: req.connector._id,
@@ -669,8 +660,9 @@ const batch = asyncHandler(async (req, res) => {
     { upsert: true },
   );
 
+  // ⭐ BATCH DONE log (always on)
   console.log(
-    ` [BATCH DONE] entityType=${entityType} upserted=${upserted} failed=${failed} totalTime=${Date.now() - __batchStart}`,
+    `✅ [BATCH DONE] entityType=${entityType} upserted=${upserted} customerOps=${customerOps.length} supplierOps=${supplierOps.length} failed=${failed} time=${Date.now() - __batchStart}ms`,
   );
 
   return send(res, 200, { upserted, failed, entityType }, "Batch processed");
@@ -691,6 +683,10 @@ const complete = asyncHandler(async (req, res) => {
   job.status = "COMPLETED";
   job.completedAt = new Date();
   await job.save();
+
+  const duration = job.completedAt - new Date(job.startedAt);
+  console.log(`🏁 [SYNC COMPLETE] jobId=${job._id} duration=${duration}ms`);
+
   return send(
     res,
     200,

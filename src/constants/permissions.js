@@ -24,6 +24,7 @@ const PERMISSIONS = {
 
 const MODULE_KEYS = [
   "dashboard",
+  "settings",
   "create-voucher",
   "sales",
   "purchase",

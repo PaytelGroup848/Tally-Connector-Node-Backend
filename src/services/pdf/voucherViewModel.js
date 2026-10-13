@@ -164,9 +164,6 @@ const ledgerEntriesOf = (voucher, lines) => {
   }));
 };
 
-// NOTE: field names below are alias-based because the final inventory-entry shape
-// should be confirmed against a real synced voucher. This is the ONLY function to
-// adjust if the real field names differ.
 const mapInventoryEntry = (e) => {
   const { qty, unit } = parseQty(
     e.billedQty ?? e.quantity ?? e.qty ?? e.actualQty,
@@ -183,15 +180,18 @@ const mapInventoryEntry = (e) => {
 };
 
 const buildItems = (voucher, lines, entries, partyName) => {
-  // 1) Inventory entries stored on the voucher
-  if (
-    Array.isArray(voucher.inventoryEntries) &&
-    voucher.inventoryEntries.length
-  ) {
-    return voucher.inventoryEntries.map(mapInventoryEntry);
+
+  const inventoryEntries =
+    (Array.isArray(voucher.inventoryEntries) && voucher.inventoryEntries) ||
+    (Array.isArray(voucher.raw?.inventoryEntries) &&
+      voucher.raw.inventoryEntries) ||
+    [];
+
+  if (inventoryEntries.length) {
+    return inventoryEntries.map(mapInventoryEntry);
   }
 
-  // 2) Synced voucher lines that carry an item
+
   const itemLines = lines.filter((l) => l.itemName);
   if (itemLines.length) {
     return itemLines.map((l) => ({
@@ -206,7 +206,7 @@ const buildItems = (voucher, lines, entries, partyName) => {
     }));
   }
 
-  // 3) Service-style voucher: no stock items, so the income/expense ledger IS the line
+
   const party = String(partyName || "")
     .trim()
     .toLowerCase();
@@ -230,7 +230,7 @@ const buildItems = (voucher, lines, entries, partyName) => {
     }));
 };
 
-/* ------------------------------ main mapper ------------------------------ */
+
 
 const buildVoucherViewModel = async ({
   company,
