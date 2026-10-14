@@ -121,6 +121,11 @@ const parseRate = (v) => {
   return m ? parseFloat(m[0].replace(/,/g, "")) || 0 : 0;
 };
 
+const extractRateFromLabel = (label) => {
+  const m = String(label || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  return m ? Number(m[1]) : 0;
+};
+
 const readLogoDataUri = async (fileName) => {
   if (!fileName) return "";
   const mime = {
@@ -180,7 +185,6 @@ const mapInventoryEntry = (e) => {
 };
 
 const buildItems = (voucher, lines, entries, partyName) => {
-
   const inventoryEntries =
     (Array.isArray(voucher.inventoryEntries) && voucher.inventoryEntries) ||
     (Array.isArray(voucher.raw?.inventoryEntries) &&
@@ -190,7 +194,6 @@ const buildItems = (voucher, lines, entries, partyName) => {
   if (inventoryEntries.length) {
     return inventoryEntries.map(mapInventoryEntry);
   }
-
 
   const itemLines = lines.filter((l) => l.itemName);
   if (itemLines.length) {
@@ -205,7 +208,6 @@ const buildItems = (voucher, lines, entries, partyName) => {
         Math.abs(num(l.credit) - num(l.debit)) || num(l.qty) * num(l.rate),
     }));
   }
-
 
   const party = String(partyName || "")
     .trim()
@@ -229,8 +231,6 @@ const buildItems = (voucher, lines, entries, partyName) => {
       amount: Math.max(e.debit, e.credit),
     }));
 };
-
-
 
 const buildVoucherViewModel = async ({
   company,
@@ -263,13 +263,24 @@ const buildVoucherViewModel = async ({
     layout === "ITEMIZED"
       ? entries
           .filter((e) => TAX_RE.test(e.name))
-          .map((e) => ({ label: e.name, amount: Math.max(e.debit, e.credit) }))
+          .map((e) => ({
+            label: e.name,
+            amount: Math.max(e.debit, e.credit),
+            rate:
+              num(e.taxRate ?? e.rate ?? e.gstRate) ||
+              extractRateFromLabel(e.name),
+          }))
       : [];
   const taxSum = taxes.reduce((sum, t) => sum + t.amount, 0);
 
   const itemsSum = items.reduce((sum, i) => sum + i.amount, 0);
   const subtotal = items.length ? itemsSum : Math.max(0, total - taxSum);
-  const roundOff = layout === "ITEMIZED" ? total - (subtotal + taxSum) : 0;
+const computed = subtotal + taxSum;
+const rounded = Math.round(computed);
+const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
+
+  const totalQty = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
+  const totalUnit = items.find((i) => i.unit)?.unit || "";
 
   const seller = {
     name: company.tallyCompanyName || "",
@@ -291,6 +302,7 @@ const buildVoucherViewModel = async ({
     numberLabel: cfg.numberLabel,
     partyLabel: cfg.partyLabel,
     seller,
+
     number: voucher.voucherNumber || "",
     date: voucher.date,
     party: {
@@ -305,12 +317,9 @@ const buildVoucherViewModel = async ({
     taxes,
     subtotal,
     roundOff,
-    total:
-      total ||
-      Math.max(
-        entries.reduce((s, e) => s + e.debit, 0),
-        entries.reduce((s, e) => s + e.credit, 0),
-      ),
+    totalQty,
+    totalUnit,
+    total: rounded,
     bank: itemizedCfg?.showBank ? bank || null : null,
     terms: layout === "ITEMIZED" ? profile?.termsAndConditions || "" : "",
     narration: String(voucher.narration || "").slice(0, 1000),

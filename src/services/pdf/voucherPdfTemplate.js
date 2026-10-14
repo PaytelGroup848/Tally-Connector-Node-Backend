@@ -110,12 +110,7 @@ const amountInWords = (amount) => {
   return `${words} Only`;
 };
 
-/* ------------------------------ columns / rows ------------------------------ */
-
-// Rows added when there are few items so a normal invoice still fills the page
-// (the classic ruled look). Rows are only padding — they never cause a page break
-// on their own for big invoices, because the count shrinks to 0 as items grow.
-const FILLER_TARGET_ROWS = { ITEMIZED: 8, ACCOUNTING: 6 };
+const FILLER_TARGET_ROWS = { ITEMIZED: 15, ACCOUNTING: 10 };
 
 const buildColumns = (vm) => {
   if (vm.layout === "ACCOUNTING") {
@@ -185,13 +180,90 @@ const buildTableRows = (vm, columns) => {
     )
     .join("");
 
-  const fillerCount = Math.max(0, FILLER_TARGET_ROWS[vm.layout] - rows.length);
+  let taxRows = "";
+
+  if (vm.layout === "ITEMIZED") {
+    // Har column ke liye ek cell banao — colspan use mat karo
+    const buildTaxRow = (cells, cls = "tax-row") => {
+      const tds = columns
+        .map((col) => {
+          const val = cells[col.key] ?? "";
+          return `<td style="text-align:${col.align}">${val || "&nbsp;"}</td>`;
+        })
+        .join("");
+      return `<tr class="${cls}">${tds}</tr>`;
+    };
+
+    // ---- Tax rows: label Desc+HSN mein right, Qty mein rate, Rate mein %, Amount mein value ----
+    taxRows = vm.taxes
+      .map((tax) => {
+        const cells = {};
+        // Desc column: label right-aligned (HSN blank rahega, isliye label Desc mein hi)
+        if (columns.some((c) => c.key === "desc")) {
+          cells.desc = `<span style="display:block;text-align:right">${esc(tax.label)}</span>`;
+        }
+        // Agar HSN column hai toh uska cell khaali
+        if (columns.some((c) => c.key === "hsn")) cells.hsn = "";
+        // Qty column mein tax rate number
+        if (columns.some((c) => c.key === "qty")) {
+          cells.qty = "";
+        }
+        // Rate column mein "%"
+        if (columns.some((c) => c.key === "rate")) {
+          cells.rate = tax.rate ? `${tax.rate}%` : "";
+        }
+        // Amount column mein tax amount
+        if (columns.some((c) => c.key === "amount")) {
+          cells.amount = formatINR(tax.amount);
+        }
+        return buildTaxRow(cells);
+      })
+      .join("");
+
+    {
+      const cells = {};
+      if (columns.some((c) => c.key === "desc")) {
+        cells.desc = `<span style="display:block;text-align:right">Round Off</span>`;
+      }
+      if (columns.some((c) => c.key === "amount")) {
+        const sign = vm.roundOff > 0 ? "+" : vm.roundOff < 0 ? "-" : "+";
+        cells.amount = `${sign}${formatINR(Math.abs(vm.roundOff))}`;
+      }
+      taxRows += buildTaxRow(cells);
+    }
+
+    // ---- Total row ----
+    const totalCells = {};
+    if (columns.some((c) => c.key === "desc")) {
+      totalCells.desc = `<strong>Total</strong>`;
+    }
+    if (columns.some((c) => c.key === "qty")) {
+      // Total qty — agar vm.totalQty ho toh; warna blank
+      totalCells.qty = vm.totalQty
+        ? esc(formatQty(vm.totalQty, vm.totalUnit || ""))
+        : "";
+    }
+    if (columns.some((c) => c.key === "amount")) {
+      totalCells.amount = `<strong>&#8377; ${formatINR(vm.total)}</strong>`;
+    }
+    taxRows += buildTaxRow(totalCells, "grand-row");
+  }
+
+  let extraRows = 0;
+  if (vm.layout === "ITEMIZED") {
+    extraRows = vm.taxes.length;
+    extraRows += 1;
+    extraRows += 1;
+  }
+
+  const fillerCount = Math.max(
+    0,
+    FILLER_TARGET_ROWS[vm.layout] - rows.length - extraRows,
+  );
   const fillerRow = `<tr class="filler">${columns.map(() => "<td>&nbsp;</td>").join("")}</tr>`;
 
-  return dataRows + fillerRow.repeat(fillerCount);
+  return dataRows + fillerRow.repeat(fillerCount) + taxRows;
 };
-
-/* ------------------------------ blocks ------------------------------ */
 
 const kvLine = (label, value) =>
   value ? `<div>${esc(label)}: <strong>${esc(value)}</strong></div>` : "";
@@ -199,20 +271,29 @@ const kvLine = (label, value) =>
 const buildSellerHtml = (seller) => `
   <div class="seller-top">
     ${seller.logoDataUri ? '<div class="logo"></div>' : ""}
-    <div class="seller-name">${esc(seller.name)}</div>
-  </div>
-  ${seller.address ? `<div>${escMultiline(seller.address)}</div>` : ""}
-  ${kvLine("GSTIN", seller.gstin)}
-  ${kvLine("PAN", seller.pan)}
-  ${kvLine("CIN", seller.cin)}
-  ${
-    seller.state
-      ? `<div>State: ${esc(seller.state)}${seller.stateCode ? ` | Code: ${esc(seller.stateCode)}` : ""}</div>`
-      : ""
-  }
-  ${kvLine("Mobile", seller.mobile)}
-  ${kvLine("Email", seller.email)}
-  ${kvLine("Website", seller.website)}`;
+    <div class="seller-info">
+      <div class="seller-name">${esc(seller.name)}</div>
+      ${seller.address ? `<div class="seller-addr">${escMultiline(seller.address)}</div>` : ""}
+      ${kvLine("GSTIN", seller.gstin)}
+      ${kvLine("PAN", seller.pan)}
+      ${kvLine("CIN", seller.cin)}
+      ${
+        seller.state
+          ? `<div>State: ${esc(seller.state)}${seller.stateCode ? ` | Code: ${esc(seller.stateCode)}` : ""}</div>`
+          : ""
+      }
+      ${kvLine("Mobile", seller.mobile)}
+      ${kvLine("Email", seller.email)}
+    ${kvLine(
+      "Website",
+      seller.website
+        ? String(seller.website)
+            .replace(/^https?:\/\//i, "")
+            .replace(/\/$/, "")
+        : "",
+    )}
+    </div>
+  </div>`;
 
 const buildPartyHtml = (vm) => {
   if (!vm.party.name) return "";
@@ -271,6 +352,27 @@ ${vm.seller.logoDataUri ? `:root{--logo:url("${vm.seller.logoDataUri}");}` : ""}
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,"Noto Sans","DejaVu Sans",sans-serif;}
 body{color:#1e293b;font-size:10.5px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 
+/* tax + total rows inside the items table */
+table.items tr.tax-row td{
+  border-left:1px solid #aaa;
+  border-right:1px solid #aaa;
+  padding:4px 6px;
+  vertical-align:top;
+}
+table.items tbody tr.grand-row td{border-bottom:1px solid #aaa !important;}
+
+table.items tr.tax-row td[colspan]{
+  font-weight:500;
+}
+table.items tr.grand-row td{
+  background:#ebebeb;
+  font-weight:700;
+  font-size:12px;
+  border-top:1px solid #aaa;
+  border-bottom:1px solid #aaa;
+  padding:5px 6px;
+}
+
 /* position:fixed elements repeat on EVERY printed page in Chromium */
 .wm{position:fixed;top:50%;left:50%;width:105mm;height:105mm;transform:translate(-50%,-50%) rotate(-20deg);
     background:var(--logo) no-repeat center/contain;opacity:.06;z-index:-1;}
@@ -282,9 +384,13 @@ body{color:#1e293b;font-size:10.5px;line-height:1.45;-webkit-print-color-adjust:
 .top-grid{display:grid;grid-template-columns:1.4fr 1fr;border:1px solid #aaa;}
 .top-grid>div{padding:8px 10px;}
 .top-grid>div:first-child{border-right:1px solid #aaa;}
-.seller-top{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
-.logo{width:84px;height:46px;background:var(--logo) no-repeat left center/contain;flex:none;}
-.seller-name{font-size:13px;font-weight:700;}
+
+/* seller block: logo left, info right */
+.seller-top{display:flex;align-items:flex-start;gap:10px;}
+.logo{width:84px;height:46px;background:var(--logo) no-repeat left center/contain;flex:none;margin-top:2px;}
+.seller-info{flex:1;min-width:0;}
+.seller-name{font-size:13px;font-weight:700;margin-bottom:2px;}
+.seller-addr{white-space:pre-line;}
 .label{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.3px;}
 .value{font-size:11.5px;font-weight:700;margin-bottom:6px;}
 .muted{color:#64748b;font-size:9.5px;}
@@ -299,7 +405,7 @@ table.items tr{break-inside:avoid;page-break-inside:avoid;} /* a row is never cu
 table.items th{background:#f1f5f9;border:1px solid #aaa;padding:5px 6px;font-size:9.5px;text-transform:uppercase;}
 table.items td{border-left:1px solid #aaa;border-right:1px solid #aaa;padding:4px 6px;vertical-align:top;overflow-wrap:anywhere;}
 table.items tbody tr:last-child td{border-bottom:1px solid #aaa;}
-table.items tr.filler td{height:20px;}
+table.items tr.filler td{height:28px;}
 .item-name{font-weight:700;}
 
 /* ---- closing: totals + bank + terms + signature always stay together ---- */
@@ -325,13 +431,6 @@ table.totals tr.grand td{background:#ebebeb;font-weight:700;font-size:12px;borde
 const buildHtml = (vm) => {
   const columns = buildColumns(vm);
 
-  const totalsRows = buildTotalsRows(vm);
-  const totalsHtml = `
-    <table class="totals">
-      ${totalsRows.map(([label, value]) => `<tr><td>${esc(label)}</td><td>${esc(value)}</td></tr>`).join("")}
-      <tr class="grand"><td>Total</td><td>&#8377; ${formatINR(vm.total)}</td></tr>
-    </table>`;
-
   const termsHtml = vm.terms
     ? `<div class="box"><div class="box-title">Terms &amp; Conditions</div>${escMultiline(vm.terms)}</div>`
     : "";
@@ -348,19 +447,19 @@ const buildHtml = (vm) => {
 <style>${buildStyles(vm)}</style>
 </head>
 <body>
-  ${vm.seller.logoDataUri ? '<div class="wm"></div>' : ""}
+
   ${vm.isCancelled ? '<div class="stamp">CANCELLED</div>' : ""}
 
   <div class="doc-title">${esc(vm.docTitle)}</div>
 
   <div class="top-grid">
     <div>${buildSellerHtml(vm.seller)}</div>
-    <div>
-      <div class="label">${esc(vm.numberLabel)}</div>
-      <div class="value">${esc(vm.number)}</div>
-      <div class="label">Date</div>
-      <div class="value">${esc(fmtDate(vm.date))}</div>
-    </div>
+   <div>
+  <div class="label">${esc(vm.numberLabel)}</div>
+  <div class="value">${esc(vm.number)}</div>
+  <div class="label">Date</div>
+  <div class="value">${esc(fmtDate(vm.date))}</div>
+</div>
   </div>
 
   ${buildPartyHtml(vm)}
@@ -378,9 +477,8 @@ const buildHtml = (vm) => {
       <span><strong>Amount in words:</strong> ${esc(amountInWords(vm.total))}</span>
       <span class="eoe">E. &amp; O.E.</span>
     </div>
-    ${totalsHtml}
     <div class="lower">
-      <div>${buildBankHtml(vm.bank)}${termsHtml}${narrationHtml}</div>
+      <div>${buildBankHtml(vm.bank)}${termsHtml}</div>
       <div class="sign">
         <div>For <strong>${esc(vm.seller.name)}</strong></div>
         <div class="sign-space"></div>
@@ -394,9 +492,15 @@ const buildHtml = (vm) => {
 
 // Chromium fills in pageNumber / totalPages itself, so "Page 2 of 4" is always correct.
 const buildFooterHtml = (vm) => `
-<div style="width:100%;padding:0 12mm;font-family:Arial,sans-serif;font-size:8px;color:#64748b;display:flex;justify-content:space-between;">
-  <span>${esc(vm.footerNote)}</span>
-  <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+<div style="width:100%;padding:0 12mm;font-family:Arial,sans-serif;font-size:8px;color:#64748b;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span>${esc(vm.footerNote)}</span>
+    <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+  </div>
+  <div style="text-align:center;margin-top:3px;font-size:7.5px;color:#94a3b8;">
+    Powered by <strong style="color:#0ea5e9;">CtrlBooks</strong> — GST billing &amp; accounting software for growing businesses.
+    <span style="color:#0ea5e9;">www.ctrlbooks.com</span>
+  </div>
 </div>`;
 
 module.exports = { buildHtml, buildFooterHtml };
