@@ -24,6 +24,7 @@ const PROFILE_FIELDS = [
   "website",
   "state",
   "stateCode",
+  "msmeNumber",
   "termsAndConditions",
 ];
 const BANK_FIELDS = [
@@ -88,6 +89,7 @@ const shapeProfile = (req, company, profile) => ({
     website: profile?.website || "",
     state: profile?.state || "",
     stateCode: profile?.stateCode || "",
+    msmeNumber: profile?.msmeNumber || "",
     termsAndConditions: profile?.termsAndConditions || "",
     logoUrl: buildLogoUrl(req, profile?.logoFileName),
     updatedAt: profile?.updatedAt || null,
@@ -139,11 +141,6 @@ const profileValidators = [
     .customSanitizer(upper)
     .matches(PAN_REGEX)
     .withMessage("Invalid PAN"),
-  body("mobile")
-    .optional(allowEmpty)
-    .customSanitizer(trimmed)
-    .matches(/^\+?[0-9\s-]{10,15}$/)
-    .withMessage("Invalid mobile number"),
   body("email")
     .optional(allowEmpty)
     .customSanitizer(lower)
@@ -161,11 +158,16 @@ const profileValidators = [
     .customSanitizer(trimmed)
     .matches(/^\d{2}$/)
     .withMessage("State code must be 2 digits"),
+  body("msmeNumber")
+    .optional(allowEmpty)
+    .customSanitizer(upper)
+    .isLength({ max: 30 })
+    .withMessage("MSME number too long"),
   body("termsAndConditions")
     .optional()
     .isString()
-    .isLength({ max: 200 })
-    .withMessage("Terms & conditions can be at most 200 characters"),
+    .isLength({ max: 500 })
+    .withMessage("Terms & conditions can be at most 500 characters"),
 ];
 
 const bankRules = (required) => {

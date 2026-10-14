@@ -288,6 +288,7 @@ const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
     gstin: profile?.gstin || "",
     pan: profile?.pan || "",
     cin: profile?.cin || "",
+    msmeNumber: profile?.msmeNumber || "",
     mobile: profile?.mobile || "",
     email: profile?.email || "",
     website: profile?.website || "",

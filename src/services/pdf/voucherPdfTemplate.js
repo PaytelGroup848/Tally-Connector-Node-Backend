@@ -277,6 +277,7 @@ const buildSellerHtml = (seller) => `
       ${kvLine("GSTIN", seller.gstin)}
       ${kvLine("PAN", seller.pan)}
       ${kvLine("CIN", seller.cin)}
+      ${kvLine("MSME", seller.msmeNumber)}
       ${
         seller.state
           ? `<div>State: ${esc(seller.state)}${seller.stateCode ? ` | Code: ${esc(seller.stateCode)}` : ""}</div>`
