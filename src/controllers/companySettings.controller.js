@@ -8,6 +8,7 @@ const CompanyProfile = require("../models/CompanyProfile");
 const CompanyBankAccount = require("../models/CompanyBankAccount");
 const {
   removeLogoFile,
+  removeSignatureFile,
   isRealImage,
 } = require("../middlewares/upload.middleware");
 const { logAudit } = require("../services/audit.service");
@@ -92,6 +93,7 @@ const shapeProfile = (req, company, profile) => ({
     msmeNumber: profile?.msmeNumber || "",
     termsAndConditions: profile?.termsAndConditions || "",
     logoUrl: buildLogoUrl(req, profile?.logoFileName),
+    signatureUrl: buildLogoUrl(req, profile?.signatureFileName),
     updatedAt: profile?.updatedAt || null,
   },
 });
@@ -335,6 +337,71 @@ const removeLogo = asyncHandler(async (req, res) => {
   return send(res, 200, { logoUrl: null }, "Logo removed");
 });
 
+const uploadSignatureHandler = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(
+      422,
+      "Signature file is required (form-data key: signature)",
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  let company;
+  try {
+    company = await scopedCompany(req);
+    if (!(await isRealImage(req.file.path))) {
+      throw new ApiError(
+        422,
+        "File is not a valid PNG, JPG or WEBP image",
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+  } catch (err) {
+    await removeSignatureFile(req.file.filename);
+    throw err;
+  }
+
+  const scope = { organizationId: req.organizationId, companyId: company._id };
+  const previous = await CompanyProfile.findOne(scope)
+    .select("signatureFileName")
+    .lean();
+
+  const profile = await CompanyProfile.findOneAndUpdate(
+    scope,
+    { $set: { signatureFileName: req.file.filename } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  ).lean();
+
+  if (previous?.signatureFileName)
+    await removeLogoFile(previous.signatureFileName);
+
+  await audit(req, "COMPANY_SIGNATURE_UPDATED", { companyId: company._id });
+
+  return send(
+    res,
+    200,
+    { signatureUrl: buildLogoUrl(req, profile.signatureFileName) },
+    "Signature updated",
+  );
+});
+
+const removeSignature = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+
+  const before = await CompanyProfile.findOneAndUpdate(
+    { organizationId: req.organizationId, companyId: company._id },
+    { $set: { signatureFileName: "" } },
+    { new: false },
+  ).lean();
+
+  if (before?.signatureFileName)
+    await removeSignatureFile(before.signatureFileName);
+
+  await audit(req, "COMPANY_SIGNATURE_REMOVED", { companyId: company._id });
+
+  return send(res, 200, { signatureUrl: null }, "Signature removed");
+});
+
 /* ------------------------------ bank accounts ------------------------------ */
 
 const setDefaultBank = async (scope, bankId) => {
@@ -567,6 +634,8 @@ module.exports = {
   getProfile,
   updateProfile,
   uploadLogoHandler,
+  uploadSignatureHandler,
+  removeSignature,
   removeLogo,
   listBanks,
   createBank,

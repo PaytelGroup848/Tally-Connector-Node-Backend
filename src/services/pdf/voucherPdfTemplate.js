@@ -110,7 +110,7 @@ const amountInWords = (amount) => {
   return `${words} Only`;
 };
 
-const FILLER_TARGET_ROWS = { ITEMIZED: 15, ACCOUNTING: 10 };
+const FILLER_TARGET_ROWS = { ITEMIZED: 12, ACCOUNTING: 7 };
 
 const buildColumns = (vm) => {
   if (vm.layout === "ACCOUNTING") {
@@ -386,6 +386,9 @@ table.items tr.grand-row td{
 .top-grid>div{padding:8px 10px;}
 .top-grid>div:first-child{border-right:1px solid #aaa;}
 
+.sign-img{height:40px;display:flex;align-items:center;justify-content:center;}
+.sign-img img{max-height:38px;max-width:90%;object-fit:contain;}
+
 /* seller block: logo left, info right */
 .seller-top{display:flex;align-items:flex-start;gap:10px;}
 .logo{width:84px;height:46px;background:var(--logo) no-repeat left center/contain;flex:none;margin-top:2px;}
@@ -480,11 +483,15 @@ const buildHtml = (vm) => {
     </div>
     <div class="lower">
       <div>${buildBankHtml(vm.bank)}${termsHtml}</div>
-      <div class="sign">
-        <div>For <strong>${esc(vm.seller.name)}</strong></div>
-        <div class="sign-space"></div>
-        <div>Authorised Signatory</div>
-      </div>
+     <div class="sign">
+  <div>For <strong>${esc(vm.seller.name)}</strong></div>
+  ${
+    vm.signatureDataUri
+      ? `<div class="sign-img"><img src="${vm.signatureDataUri}" alt="Signature"/></div>`
+      : `<div class="sign-space"></div>`
+  }
+  <div>Authorised Signatory</div>
+</div>
     </div>
   </div>
 </body>

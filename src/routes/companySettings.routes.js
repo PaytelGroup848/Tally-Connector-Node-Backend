@@ -8,11 +8,13 @@ const {
 } = require("../middlewares/rbac.middleware");
 const companyAccessGuard = require("../middlewares/companyAccess.middleware");
 const { PERMISSIONS } = require("../constants/permissions");
-const { uploadLogo } = require("../middlewares/upload.middleware");
+const {
+  uploadLogo,
+  uploadSignature,
+} = require("../middlewares/upload.middleware");
 const ctrl = require("../controllers/companySettings.controller");
 
 const router = express.Router();
-
 
 const read = [
   webAuth,
@@ -25,7 +27,6 @@ const write = [
   requireActiveSubscription,
   requireRolePermission(PERMISSIONS.COMPANY_SETTINGS_MANAGE),
 ];
-
 
 router.get(
   "/:id/settings",
@@ -55,6 +56,22 @@ router.delete(
   ctrl.idValidators,
   validate,
   ctrl.removeLogo,
+);
+
+router.post(
+  "/:id/settings/signature",
+  ...write,
+  ctrl.idValidators,
+  validate,
+  uploadSignature,
+  ctrl.uploadSignatureHandler,
+);
+router.delete(
+  "/:id/settings/signature",
+  ...write,
+  ctrl.idValidators,
+  validate,
+  ctrl.removeSignature,
 );
 
 // Bank accounts

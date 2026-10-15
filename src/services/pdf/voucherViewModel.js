@@ -295,6 +295,7 @@ const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
     state: profile?.state || "",
     stateCode: profile?.stateCode || "",
     logoDataUri: await readLogoDataUri(profile?.logoFileName),
+    signatureDataUri: await readLogoDataUri(profile?.signatureFileName),
   };
 
   return {

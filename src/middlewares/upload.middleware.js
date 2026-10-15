@@ -6,7 +6,9 @@ const ApiError = require("../utils/ApiError");
 const { ERROR_CODES } = require("../constants/permissions");
 
 const LOGO_DIR = path.join(process.cwd(), "uploads", "company-logos");
+const SIGNATURE_DIR = path.join(process.cwd(), "uploads", "company-signatures");
 fs.mkdirSync(LOGO_DIR, { recursive: true });
+fs.mkdirSync(SIGNATURE_DIR, { recursive: true });
 
 const ALLOWED_TYPES = {
   "image/png": ".png",
@@ -14,22 +16,23 @@ const ALLOWED_TYPES = {
   "image/webp": ".webp",
 };
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, LOGO_DIR),
+// ---- shared storage builder (folder ke hisaab se) ----
+const makeStorage = (dir) =>
+  multer.diskStorage({
+    destination: (req, file, cb) => cb(null, dir),
+    filename: (req, file, cb) =>
+      cb(
+        null,
+        `${crypto.randomBytes(16).toString("hex")}${ALLOWED_TYPES[file.mimetype]}`,
+      ),
+  });
 
-  filename: (req, file, cb) =>
-    cb(
-      null,
-      `${crypto.randomBytes(16).toString("hex")}${ALLOWED_TYPES[file.mimetype]}`,
-    ),
-});
-
-const fileFilter = (req, file, cb) => {
+const fileFilter = (label) => (req, file, cb) => {
   if (!ALLOWED_TYPES[file.mimetype]) {
     return cb(
       new ApiError(
         422,
-        "Logo must be a PNG, JPG or WEBP image",
+        `${label} must be a PNG, JPG or WEBP image`,
         ERROR_CODES.VALIDATION_ERROR,
       ),
     );
@@ -37,19 +40,14 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
-});
-
-const uploadLogo = (req, res, next) => {
-  upload.single("logo")(req, res, (err) => {
+// ---- error wrapper (shared) ----
+const wrapUpload = (uploader, fieldName, label, maxMb) => (req, res, next) => {
+  uploader.single(fieldName)(req, res, (err) => {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       const message =
         err.code === "LIMIT_FILE_SIZE"
-          ? "Logo must be 2 MB or smaller"
+          ? `${label} must be ${maxMb} MB or smaller`
           : err.message;
       return next(new ApiError(422, message, ERROR_CODES.VALIDATION_ERROR));
     }
@@ -57,7 +55,28 @@ const uploadLogo = (req, res, next) => {
   });
 };
 
+// ---- logo upload (2 MB) ----
+const logoUpload = multer({
+  storage: makeStorage(LOGO_DIR),
+  fileFilter: fileFilter("Logo"),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+});
+const uploadLogo = wrapUpload(logoUpload, "logo", "Logo", 2);
 
+// ---- signature upload (500 KB — signature chhoti hoti hai) ----
+const signatureUpload = multer({
+  storage: makeStorage(SIGNATURE_DIR),
+  fileFilter: fileFilter("Signature"),
+  limits: { fileSize: 1024 * 1024, files: 1 },
+});
+const uploadSignature = wrapUpload(
+  signatureUpload,
+  "signature",
+  "Signature",
+  0.5,
+);
+
+// ---- real image check (shared) ----
 const isRealImage = async (filePath) => {
   const handle = await fs.promises.open(filePath, "r");
   try {
@@ -76,11 +95,23 @@ const isRealImage = async (filePath) => {
   }
 };
 
-const removeLogoFile = async (fileName) => {
+// ---- removal (shared, folder param ke saath) ----
+const removeFile = async (fileName, dir) => {
   if (!fileName) return;
   try {
-    await fs.promises.unlink(path.join(LOGO_DIR, path.basename(fileName)));
+    await fs.promises.unlink(path.join(dir, path.basename(fileName)));
   } catch (e) {}
 };
 
-module.exports = { uploadLogo, isRealImage, removeLogoFile, LOGO_DIR };
+const removeLogoFile = (fileName) => removeFile(fileName, LOGO_DIR);
+const removeSignatureFile = (fileName) => removeFile(fileName, SIGNATURE_DIR);
+
+module.exports = {
+  uploadLogo,
+  uploadSignature,
+  isRealImage,
+  removeLogoFile,
+  removeSignatureFile,
+  LOGO_DIR,
+  SIGNATURE_DIR,
+};

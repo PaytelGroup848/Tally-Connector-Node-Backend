@@ -25,6 +25,7 @@ const companyProfileSchema = new mongoose.Schema(
     msmeNumber: { type: String, default: "", trim: true },
     termsAndConditions: { type: String, default: "", maxlength: 500 },
     logoFileName: { type: String, default: "" },
+    signatureFileName: { type: String, default: "" },
   },
   { timestamps: true },
 );
