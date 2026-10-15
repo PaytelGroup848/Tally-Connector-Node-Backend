@@ -1,6 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const { LOGO_DIR } = require("../../middlewares/upload.middleware");
+const {
+  LOGO_DIR,
+  SIGNATURE_DIR,
+} = require("../../middlewares/upload.middleware");
 
 /* ------------------------------ voucher type config ------------------------------ */
 
@@ -145,10 +148,25 @@ const readLogoDataUri = async (fileName) => {
   }
 };
 
-/* ------------------------------ entries / items ------------------------------ */
+const readSignatureDataUri = async (fileName) => {
+  if (!fileName) return "";
+  const mime = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+  }[path.extname(fileName).toLowerCase()];
+  if (!mime) return "";
+  try {
+    const buf = await fs.promises.readFile(
+      path.join(SIGNATURE_DIR, path.basename(fileName)),
+    );
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch (e) {
+    return "";
+  }
+};
 
-// Same sign convention the existing "voucher-lines" report already uses:
-// negative amount = debit, positive amount = credit.
 const ledgerEntriesOf = (voucher, lines) => {
   if (Array.isArray(voucher.ledgerEntries) && voucher.ledgerEntries.length) {
     return voucher.ledgerEntries.map((e) => {
@@ -275,9 +293,9 @@ const buildVoucherViewModel = async ({
 
   const itemsSum = items.reduce((sum, i) => sum + i.amount, 0);
   const subtotal = items.length ? itemsSum : Math.max(0, total - taxSum);
-const computed = subtotal + taxSum;
-const rounded = Math.round(computed);
-const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
+  const computed = subtotal + taxSum;
+  const rounded = Math.round(computed);
+  const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
 
   const totalQty = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
   const totalUnit = items.find((i) => i.unit)?.unit || "";
@@ -295,7 +313,7 @@ const roundOff = layout === "ITEMIZED" ? rounded - computed : 0;
     state: profile?.state || "",
     stateCode: profile?.stateCode || "",
     logoDataUri: await readLogoDataUri(profile?.logoFileName),
-    signatureDataUri: await readLogoDataUri(profile?.signatureFileName),
+    signatureDataUri: await readSignatureDataUri(profile?.signatureFileName),
   };
 
   return {

@@ -421,12 +421,14 @@ table.totals td{padding:4px 8px;border-bottom:1px solid #e2e8f0;}
 table.totals td:last-child{text-align:right;}
 table.totals tr.grand td{background:#ebebeb;font-weight:700;font-size:12px;border-top:1px solid #aaa;border-bottom:none;}
 
-.lower{display:grid;grid-template-columns:1fr 62mm;gap:8px;margin-top:8px;}
+.lower + .box{margin-top:8px;}
+
+.lower{display:grid;grid-template-columns:1fr 62mm;gap:8px;margin-top:8px;align-items:stretch;}
 .box{border:1px solid #aaa;padding:6px 8px;margin-bottom:6px;break-inside:avoid;}
 .box-title{font-size:9.5px;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:3px;}
 .kv{display:grid;grid-template-columns:90px 1fr;gap:2px 6px;}
 .sign{border:1px solid #aaa;padding:6px 8px;display:flex;flex-direction:column;justify-content:space-between;
-    min-height:78px;text-align:center;align-self:start;}
+    min-height:78px;text-align:center;}
 .sign-space{height:40px;}
 `;
 
@@ -482,17 +484,18 @@ const buildHtml = (vm) => {
       <span class="eoe">E. &amp; O.E.</span>
     </div>
     <div class="lower">
-      <div>${buildBankHtml(vm.bank)}${termsHtml}</div>
-     <div class="sign">
-  <div>For <strong>${esc(vm.seller.name)}</strong></div>
-  ${
-    vm.signatureDataUri
-      ? `<div class="sign-img"><img src="${vm.signatureDataUri}" alt="Signature"/></div>`
-      : `<div class="sign-space"></div>`
-  }
-  <div>Authorised Signatory</div>
+  <div>${buildBankHtml(vm.bank)}</div>
+  <div class="sign">
+    <div>For <strong>${esc(vm.seller.name)}</strong></div>
+    ${
+      vm.seller.signatureDataUri
+        ? `<div class="sign-img"><img src="${vm.seller.signatureDataUri}" alt="Signature"/></div>`
+        : `<div class="sign-space"></div>`
+    }
+    <div>Authorised Signatory</div>
+  </div>
 </div>
-    </div>
+${termsHtml}
   </div>
 </body>
 </html>`;
