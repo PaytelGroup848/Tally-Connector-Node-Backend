@@ -70,13 +70,20 @@ const scopedCompany = async (req) => {
   return company;
 };
 
-const buildLogoUrl = (req, fileName) => {
+
+const buildFileUrl = (req, folder, fileName) => {
   if (!fileName) return null;
   const base = (
     process.env.PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`
   ).replace(/\/$/, "");
-  return `${base}/api/uploads/company-logos/${fileName}`;
+  return `${base}/api/uploads/${folder}/${fileName}`;
 };
+
+const buildLogoUrl = (req, fileName) =>
+  buildFileUrl(req, "company-logos", fileName);
+
+const buildSignatureUrl = (req, fileName) =>
+  buildFileUrl(req, "company-signatures", fileName);
 
 const shapeProfile = (req, company, profile) => ({
   company: { id: company._id, companyName: company.tallyCompanyName },
@@ -93,7 +100,7 @@ const shapeProfile = (req, company, profile) => ({
     msmeNumber: profile?.msmeNumber || "",
     termsAndConditions: profile?.termsAndConditions || "",
     logoUrl: buildLogoUrl(req, profile?.logoFileName),
-    signatureUrl: buildLogoUrl(req, profile?.signatureFileName),
+    signatureUrl: buildSignatureUrl(req, profile?.signatureFileName),
     updatedAt: profile?.updatedAt || null,
   },
 });
@@ -372,15 +379,15 @@ const uploadSignatureHandler = asyncHandler(async (req, res) => {
     { upsert: true, new: true, setDefaultsOnInsert: true },
   ).lean();
 
-  if (previous?.signatureFileName)
-    await removeLogoFile(previous.signatureFileName);
+if (previous?.signatureFileName)
+  await removeSignatureFile(previous.signatureFileName); 
 
   await audit(req, "COMPANY_SIGNATURE_UPDATED", { companyId: company._id });
 
   return send(
     res,
     200,
-    { signatureUrl: buildLogoUrl(req, profile.signatureFileName) },
+    { signatureUrl: buildSignatureUrl(req, profile?.signatureFileName) },
     "Signature updated",
   );
 });
@@ -401,6 +408,8 @@ const removeSignature = asyncHandler(async (req, res) => {
 
   return send(res, 200, { signatureUrl: null }, "Signature removed");
 });
+
+
 
 /* ------------------------------ bank accounts ------------------------------ */
 
