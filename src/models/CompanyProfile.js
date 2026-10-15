@@ -23,7 +23,7 @@ const companyProfileSchema = new mongoose.Schema(
     state: { type: String, default: "", trim: true },
     stateCode: { type: String, default: "", trim: true },
     msmeNumber: { type: String, default: "", trim: true },
-    termsAndConditions: { type: String, default: "", maxlength: 500 },
+    termsAndConditions: { type: String, default: "", maxlength: 800 },
     logoFileName: { type: String, default: "" },
     signatureFileName: { type: String, default: "" },
   },

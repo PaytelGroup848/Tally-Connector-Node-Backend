@@ -175,8 +175,8 @@ const profileValidators = [
   body("termsAndConditions")
     .optional()
     .isString()
-    .isLength({ max: 500 })
-    .withMessage("Terms & conditions can be at most 500 characters"),
+    .isLength({ max: 800 })
+    .withMessage("Terms & conditions can be at most 800 characters"),
 ];
 
 const bankRules = (required) => {
