@@ -310,6 +310,64 @@ const buildPartyHtml = (vm) => {
   </div>`;
 };
 
+const buildConsigneeHtml = (vm) => {
+  const c = vm.consignee || {};
+  if (!c.name && !c.gstin) return "";
+
+  const stateLine = [
+    c.state && `State: ${esc(c.state)}`,
+    c.pincode && `Postal Code: ${esc(c.pincode)}`,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  return `
+  <div class="ship-box">
+    <div class="box-title">Ship To</div>
+    <div class="party-name">${esc(c.name)}</div>
+    ${c.gstin ? `<div>GSTIN/UIN: <strong>${esc(c.gstin)}</strong></div>` : ""}
+    ${c.address ? `<div>Address: ${escMultiline(c.address)}</div>` : ""}
+    ${c.country ? `<div>Country: ${esc(c.country)}</div>` : ""}
+    ${stateLine ? `<div>${stateLine}</div>` : ""}
+  </div>`;
+};
+
+const buildDispatchHtml = (vm) => {
+  const d = vm.dispatch || {};
+  const rows = [
+    ["Dispatch From", d.from],
+    ["Dispatch Through", d.through],
+    ["Dispatch Document No", d.docNo],
+    ["Dispatch Date", d.date && fmtDate(d.date)],
+    ["Vehicle No", d.vehicleNo],
+  ].filter(([, v]) => v);
+
+  if (!rows.length) return "";
+
+  return `
+  <div class="ship-box">
+    <div class="box-title">Dispatch Details</div>
+    ${rows.map(([k, v]) => `<div>${esc(k)}: <strong>${esc(v)}</strong></div>`).join("")}
+  </div>`;
+};
+
+const buildOrderHtml = (vm) => {
+  const o = vm.order || {};
+  const rows = [
+    ["Order No", o.no],
+    ["Order Date", o.date && fmtDate(o.date)],
+    ["Terms of Delivery", o.terms],
+  ].filter(([, v]) => v);
+
+  if (!rows.length) return "";
+
+  return `
+  <div class="ship-box">
+    <div class="box-title">Order Details</div>
+    ${rows.map(([k, v]) => `<div>${esc(k)}: <strong>${esc(v)}</strong></div>`).join("")}
+  </div>`;
+};
+
 const buildBankHtml = (bank) => {
   if (!bank) return "";
   const rows = [
@@ -353,6 +411,39 @@ ${vm.seller.logoDataUri ? `:root{--logo:url("${vm.seller.logoDataUri}");}` : ""}
 *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,"Noto Sans","DejaVu Sans",sans-serif;}
 body{color:#1e293b;font-size:10.5px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 
+/* party-grid: 2x2 with dividers */
+.party-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:4px;
+  margin-top:6px;
+}
+.party-grid > .party,
+.party-grid > .ship-box{
+  border:1px solid #aaa;
+  padding:8px 12px;
+  break-inside:avoid;
+}
+
+
+/* HATAO — ye sab */
+.party-grid > *:nth-child(odd){
+  border-right:1px solid #aaa;
+}
+.party-grid > *:nth-child(-n+2){
+  border-bottom:1px solid #aaa;
+}
+.party-grid > *:nth-child(-n+2){
+  padding-bottom:10px;
+}
+.party-grid > *:nth-child(n+3){
+  padding-top:10px;
+}
+
+
+
+.ship-box .box-title{margin-bottom:3px;}
+.party .label{margin-bottom:2px;}
 /* tax + total rows inside the items table */
 table.items tr.tax-row td{
   border-left:1px solid #aaa;
@@ -399,8 +490,11 @@ table.items tr.grand-row td{
 .value{font-size:11.5px;font-weight:700;margin-bottom:6px;}
 .muted{color:#64748b;font-size:9.5px;}
 
-.party{border:1px solid #aaa;border-top:none;padding:6px 10px;break-inside:avoid;}
+
 .party-name{font-size:12.5px;font-weight:700;}
+
+
+.ship-box .box-title{margin-bottom:3px;}
 
 /* ---- items table: the part that must survive huge data ---- */
 table.items{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:8px;}
@@ -468,7 +562,12 @@ const buildHtml = (vm) => {
 </div>
   </div>
 
+<div class="party-grid">
   ${buildPartyHtml(vm)}
+  ${buildConsigneeHtml(vm)}
+  ${buildDispatchHtml(vm)}
+  ${buildOrderHtml(vm)}
+</div>
 
   <table class="items">
     <colgroup>${columns.map((col) => `<col style="width:${col.width}"/>`).join("")}</colgroup>

@@ -300,6 +300,33 @@ const buildVoucherViewModel = async ({
   const totalQty = items.reduce((sum, i) => sum + (Number(i.qty) || 0), 0);
   const totalUnit = items.find((i) => i.unit)?.unit || "";
 
+
+    const advanced =
+      voucher.raw?.advancedSettings || voucher.advancedSettings || {};
+
+    const consignee = {
+      name: advanced.consigneeName || "",
+      gstin: advanced.consigneeGstin || "",
+      address: advanced.consigneeAddress || "",
+      state: advanced.consigneeState || "",
+      country: advanced.consigneeCountry || "",
+      pincode: advanced.consigneePincode || "",
+    };
+
+    const dispatch = {
+      from: advanced.destination || "",
+      through: advanced.dispatchedThrough || "",
+      docNo: advanced.dispatchDocNo || "",
+      date: advanced.dispatchDate || "",
+      vehicleNo: advanced.vehicleNo || "",
+    };
+
+    const order = {
+      no: advanced.orderNo || "",
+      date: advanced.orderDate || "",
+      terms: advanced.terms || "",
+    };
+
   const seller = {
     name: company.tallyCompanyName || "",
     address: profile?.address || "",
@@ -342,6 +369,9 @@ const buildVoucherViewModel = async ({
     total: rounded,
     bank: itemizedCfg?.showBank ? bank || null : null,
     terms: layout === "ITEMIZED" ? profile?.termsAndConditions || "" : "",
+    consignee,
+    dispatch,
+    order,
     narration: String(voucher.narration || "").slice(0, 1000),
     isCancelled: Boolean(voucher.isCancelled),
     footerNote: profile?.state
