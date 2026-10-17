@@ -342,7 +342,7 @@ const buildVoucherViewModel = async ({
     logoDataUri: await readLogoDataUri(profile?.logoFileName),
     signatureDataUri: await readSignatureDataUri(profile?.signatureFileName),
   };
-
+const isContra = typeKey === "contra";
   return {
     layout,
     docTitle: cfg.title,
@@ -352,13 +352,15 @@ const buildVoucherViewModel = async ({
 
     number: voucher.voucherNumber || "",
     date: voucher.date,
-    party: {
-      name: partyName,
-      address: party?.address || "",
-      gstin: party?.gstin || "",
-      phone: party?.phone || "",
-      email: party?.email || "",
-    },
+    
+
+party: isContra ? null : {
+  name: partyName,
+  address: party?.address || "",
+  gstin: party?.gstin || "",
+  phone: party?.phone || "",
+  email: party?.email || "",
+},
     items,
     entries: layout === "ACCOUNTING" ? entries.filter((e) => e.name) : [],
     taxes,

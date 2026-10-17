@@ -110,7 +110,7 @@ const amountInWords = (amount) => {
   return `${words} Only`;
 };
 
-const FILLER_TARGET_ROWS = { ITEMIZED: 12, ACCOUNTING: 7 };
+const FILLER_TARGET_ROWS = { ITEMIZED: 10, ACCOUNTING: 5 };
 
 const buildColumns = (vm) => {
   if (vm.layout === "ACCOUNTING") {
@@ -297,7 +297,7 @@ const buildSellerHtml = (seller) => `
   </div>`;
 
 const buildPartyHtml = (vm) => {
-  if (!vm.party.name) return "";
+  if (!vm.party || !vm.party.name) return "";
   const p = vm.party;
   return `
   <div class="party">
@@ -503,7 +503,7 @@ table.items tr{break-inside:avoid;page-break-inside:avoid;} /* a row is never cu
 table.items th{background:#f1f5f9;border:1px solid #aaa;padding:5px 6px;font-size:9.5px;text-transform:uppercase;}
 table.items td{border-left:1px solid #aaa;border-right:1px solid #aaa;padding:4px 6px;vertical-align:top;overflow-wrap:anywhere;}
 table.items tbody tr:last-child td{border-bottom:1px solid #aaa;}
-table.items tr.filler td{height:28px;}
+table.items tr.filler td{height:25px;}
 .item-name{font-weight:700;}
 
 /* ---- closing: totals + bank + terms + signature always stay together ---- */

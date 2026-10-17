@@ -361,7 +361,7 @@ const listSales = asyncHandler(async (req, res) => {
   const [items, total, totalAmountResult] = await Promise.all([
     Voucher.find(filter)
       .select(
-        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration raw",
       )
       .sort({ date: -1, _id: -1 })
       .skip(skip)
@@ -433,7 +433,7 @@ const listCreditNotes = asyncHandler(async (req, res) => {
   const [items, total, totalAmountResult] = await Promise.all([
     Voucher.find(filter)
       .select(
-        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration",
+        "_id tallyExternalId voucherType voucherNumber date partyLedger amount narration raw",
       )
       .sort({ date: -1, _id: -1 })
       .skip(skip)
