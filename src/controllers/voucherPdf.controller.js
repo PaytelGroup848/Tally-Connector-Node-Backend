@@ -121,4 +121,71 @@ const downloadVoucherPdf = asyncHandler(async (req, res) => {
   return res.send(pdf);
 });
 
-module.exports = { downloadVoucherPdf, voucherPdfValidators };
+
+const previewVoucherHtml = asyncHandler(async (req, res) => {
+  const company = await Company.findOne({
+    _id: req.params.id,
+    organizationId: req.organizationId,
+  })
+    .select("tallyCompanyName")
+    .lean();
+  if (!company)
+    throw new ApiError(404, "Company not found", ERROR_CODES.NOT_FOUND);
+
+  const scope = { organizationId: req.organizationId, companyId: company._id };
+
+  const voucher = await Voucher.findOne({
+    ...scope,
+    _id: req.params.voucherId,
+  }).lean();
+  if (!voucher)
+    throw new ApiError(404, "Voucher not found", ERROR_CODES.NOT_FOUND);
+
+  const typeKey = String(voucher.voucherType || "")
+    .trim()
+    .toLowerCase();
+
+  const [profile, bank, lines, party] = await Promise.all([
+    CompanyProfile.findOne(scope).lean(),
+    CompanyBankAccount.findOne(scope)
+      .sort({ isDefault: -1, createdAt: 1 })
+      .lean(),
+    VoucherLine.find({ ...scope, voucherId: voucher._id }).lean(),
+    findParty(
+      scope,
+      voucher.partyLedger,
+      SUPPLIER_SIDE_TYPES.includes(typeKey),
+    ),
+  ]);
+
+  const viewModel = await buildVoucherViewModel({
+    company,
+    voucher,
+    lines,
+    profile,
+    bank,
+    party,
+  });
+
+  if (
+    viewModel.items.length > MAX_LINE_ITEMS ||
+    viewModel.entries.length > MAX_LINE_ITEMS
+  ) {
+    throw new ApiError(
+      422,
+      `This voucher has too many lines to preview (limit ${MAX_LINE_ITEMS})`,
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+ 
+  const html = buildHtml(viewModel);
+
+  res.set({
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "private, no-store",
+  });
+  return res.send(html);
+});
+
+module.exports = { downloadVoucherPdf, previewVoucherHtml, voucherPdfValidators };

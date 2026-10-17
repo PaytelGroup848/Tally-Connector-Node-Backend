@@ -41,6 +41,14 @@ router.get(
 );
 
 router.get(
+  "/:id/vouchers/:voucherId/html",
+  requirePermission(PERMISSIONS.VOUCHER_READ),
+  pdfCtrl.voucherPdfValidators,
+  validate,
+  pdfCtrl.previewVoucherHtml,
+);
+
+router.get(
   "/:id/voucher-types",
   requirePermission(PERMISSIONS.VOUCHER_READ),
   ctrl.listVoucherTypes,
