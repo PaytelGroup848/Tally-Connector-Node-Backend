@@ -172,17 +172,31 @@ const listStock = asyncHandler(async (req, res) => {
 const listVouchers = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
   const { page, limit, skip } = paginate(req);
-  const filter = { organizationId: req.organizationId, companyId: company._id };
-  if (req.query.voucherType) filter.voucherType = req.query.voucherType;
+
+  const filter = {
+    organizationId: req.organizationId,
+    companyId: company._id,
+  };
+
+  if (req.query.voucherType) {
+    filter.voucherType = req.query.voucherType;
+  }
+
   if (req.query.from || req.query.to) {
     filter.date = {};
     if (req.query.from) filter.date.$gte = new Date(req.query.from);
     if (req.query.to) filter.date.$lte = new Date(req.query.to);
   }
+
   const [items, total] = await Promise.all([
-    Voucher.find(filter).sort({ date: -1 }).skip(skip).limit(limit).lean(),
+    Voucher.find(filter)
+      .sort({ date: -1, _id: -1 }) 
+      .skip(skip)
+      .limit(limit)
+      .lean(),
     Voucher.countDocuments(filter),
   ]);
+
   return send(res, 200, { items, total, page, limit }, "Vouchers");
 });
 
