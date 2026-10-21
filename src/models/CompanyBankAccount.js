@@ -27,19 +27,17 @@ const companyBankAccountSchema = new mongoose.Schema(
     ifscCode: { type: String, required: true, trim: true, uppercase: true },
     swiftCode: { type: String, default: "", trim: true, uppercase: true },
     branchName: { type: String, default: "", trim: true, maxlength: 100 },
+    tallyExternalId: { type: String, default: "" },
 
- 
     isDefault: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
-
 companyBankAccountSchema.index(
   { organizationId: 1, companyId: 1, accountNumber: 1, ifscCode: 1 },
   { unique: true },
 );
-
 
 companyBankAccountSchema.index({
   organizationId: 1,
@@ -47,7 +45,6 @@ companyBankAccountSchema.index({
   isDefault: -1,
   createdAt: 1,
 });
-
 
 companyBankAccountSchema.index(
   { organizationId: 1, companyId: 1 },

@@ -12,6 +12,7 @@ const {
   isRealImage,
 } = require("../middlewares/upload.middleware");
 const { logAudit } = require("../services/audit.service");
+const { postTallyCommand } = require("../services/tallyCommand.service");
 
 const MAX_BANKS_PER_COMPANY = 20;
 
@@ -70,7 +71,6 @@ const scopedCompany = async (req) => {
   return company;
 };
 
-
 const buildFileUrl = (req, folder, fileName) => {
   if (!fileName) return null;
   const base = (
@@ -107,6 +107,7 @@ const shapeProfile = (req, company, profile) => ({
 
 const shapeBank = (b) => ({
   id: b._id,
+  tallyExternalId: b.tallyExternalId || "",
   bankName: b.bankName,
   under: b.under,
   accountHolderName: b.accountHolderName,
@@ -379,8 +380,8 @@ const uploadSignatureHandler = asyncHandler(async (req, res) => {
     { upsert: true, new: true, setDefaultsOnInsert: true },
   ).lean();
 
-if (previous?.signatureFileName)
-  await removeSignatureFile(previous.signatureFileName); 
+  if (previous?.signatureFileName)
+    await removeSignatureFile(previous.signatureFileName);
 
   await audit(req, "COMPANY_SIGNATURE_UPDATED", { companyId: company._id });
 
@@ -408,8 +409,6 @@ const removeSignature = asyncHandler(async (req, res) => {
 
   return send(res, 200, { signatureUrl: null }, "Signature removed");
 });
-
-
 
 /* ------------------------------ bank accounts ------------------------------ */
 
@@ -494,9 +493,43 @@ const createBank = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  // The first bank is automatically the default.
   if (count === 0 || req.body.isDefault === true) {
     bank = await setDefaultBank(scope, bank._id);
+  }
+
+  try {
+    await postTallyCommand({
+      organizationId: req.organizationId,
+      companyId: company._id,
+      type: "CREATE_LEDGER",
+      payload: {
+        companyId: String(company._id),
+        ledgerName: bank.bankName,
+        parent: bank.under || "Bank Accounts",
+        ledgerType: "BANK",
+        openingBalance: 0,
+        gstin: "",
+        description: "",
+        bankDetails: {
+          accountHolderName: bank.accountHolderName,
+          accountNumber: bank.accountNumber,
+          ifscCode: bank.ifscCode,
+          swiftCode: bank.swiftCode || "",
+          branchName: bank.branchName || "",
+          bankName: bank.bankName,
+        },
+      },
+      user: req.user,
+    });
+  } catch (syncErr) {
+    // Tally sync fail ho toh MongoDB se bhi hata do
+    await bank.deleteOne();
+    console.error("Tally bank ledger creation failed:", syncErr);
+    throw new ApiError(
+      502,
+      `Bank save failed at Tally: ${syncErr.message}. Please try again.`,
+      ERROR_CODES.VALIDATION_ERROR,
+    );
   }
 
   await audit(req, "COMPANY_BANK_ADDED", {
@@ -505,7 +538,12 @@ const createBank = asyncHandler(async (req, res) => {
     bankName: bank.bankName,
   });
 
-  return send(res, 201, { bank: shapeBank(bank) }, "Bank account added");
+  return send(
+    res,
+    201,
+    { bank: shapeBank(bank), tallySynced: true },
+    "Bank account added",
+  );
 });
 
 const updateBank = asyncHandler(async (req, res) => {
@@ -568,9 +606,43 @@ const updateBank = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  if (req.body.isDefault === true && !bank.isDefault) {
-    bank = await setDefaultBank(scope, bank._id);
+  const isTallySynced = Boolean(bank.tallyExternalId);
+
+  if (isTallySynced) {
+    try {
+      await postTallyCommand({
+        organizationId: req.organizationId,
+        companyId: company._id,
+        type: "UPDATE_LEDGER",
+        payload: {
+          companyId: String(company._id),
+          ledgerId: String(bank._id),
+          tallyExternalId: bank.tallyExternalId,
+          ledgerName: bank.bankName,
+          parent: bank.under || "Bank Accounts",
+          ledgerType: "BANK",
+          bankDetails: {
+            accountHolderName: bank.accountHolderName,
+            accountNumber: bank.accountNumber,
+            ifscCode: bank.ifscCode,
+            swiftCode: bank.swiftCode || "",
+            branchName: bank.branchName || "",
+            bankName: bank.bankName,
+          },
+        },
+        user: req.user,
+      });
+    } catch (syncErr) {
+      console.error("Tally bank ledger update failed:", syncErr);
+      // Update fail ho toh error throw karo (MongoDB mein save toh ho gaya)
+      throw new ApiError(
+        502,
+        `Bank updated locally, but Tally sync failed: ${syncErr.message}`,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
   }
+  // TALLY UPDATE SYNC KHATAM
 
   await audit(req, "COMPANY_BANK_UPDATED", {
     companyId: company._id,
@@ -578,7 +650,12 @@ const updateBank = asyncHandler(async (req, res) => {
     fields: Object.keys(data),
   });
 
-  return send(res, 200, { bank: shapeBank(bank) }, "Bank account updated");
+  return send(
+    res,
+    200,
+    { bank: shapeBank(bank), tallySynced: isTallySynced },
+    "Bank account updated",
+  );
 });
 
 const makeDefaultBank = asyncHandler(async (req, res) => {
