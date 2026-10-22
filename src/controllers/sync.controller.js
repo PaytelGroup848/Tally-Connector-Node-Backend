@@ -16,6 +16,7 @@ const VoucherLine = require("../models/VoucherLine");
 const StockBalance = require("../models/StockBalance");
 const BillAllocation = require("../models/BillAllocation");
 const { pickPartyContact } = require("../utils/partyContact");
+const CompanyBankAccount = require("../models/CompanyBankAccount");
 
 const ENTITY_MODELS = {
   LEDGER: Ledger,
@@ -504,17 +505,99 @@ const batch = asyncHandler(async (req, res) => {
       });
       modelPayloads.push(record);
 
-      if (entityType === "LEDGER") {
-        const partyOps = partyUpsertOpsFromLedger(doc);
-        for (const op of partyOps.customerOps) {
-          customerOps.push(op);
-          customerPayloads.push(record);
-        }
-        for (const op of partyOps.supplierOps) {
-          supplierOps.push(op);
-          supplierPayloads.push(record);
+    if (entityType === "LEDGER") {
+      const partyOps = partyUpsertOpsFromLedger(doc);
+      for (const op of partyOps.customerOps) {
+        customerOps.push(op);
+        customerPayloads.push(record);
+      }
+      for (const op of partyOps.supplierOps) {
+        supplierOps.push(op);
+        supplierPayloads.push(record);
+      }
+
+      // 👇 NAYA CODE: Bank ledger ko CompanyBankAccount mein bhi sync karo
+      const isBankLedger =
+        doc.ledgerType === "BANK" ||
+        normalize(doc.parent) === "bank accounts" ||
+        normalize(doc.group) === "bank accounts";
+
+      if (isBankLedger) {
+        const bankDetails = record.bankDetails || record.raw?.bankDetails || {};
+
+        // Tally mein bank details hain ya nahi check karo
+        const hasBankDetails =
+          bankDetails.accountNumber ||
+          bankDetails.ifscCode ||
+          bankDetails.accountHolderName;
+
+        // Existing app bank check karo (account number + IFSC se)
+        const existingBank = await CompanyBankAccount.findOne({
+          organizationId: ctx.organizationId,
+          companyId: ctx.companyId,
+          $or: [
+            { tallyExternalId: String(record.tallyExternalId) },
+            ...(hasBankDetails && bankDetails.accountNumber
+              ? [
+                  {
+                    accountNumber: String(bankDetails.accountNumber).trim(),
+                    ifscCode: String(bankDetails.ifscCode || "")
+                      .toUpperCase()
+                      .trim(),
+                  },
+                ]
+              : []),
+          ],
+        });
+
+        if (existingBank) {
+          // 👇 Update existing
+          await CompanyBankAccount.updateOne(
+            { _id: existingBank._id },
+            {
+              $set: {
+                bankName: doc.name,
+                tallyExternalId: String(record.tallyExternalId),
+                ...(bankDetails.accountHolderName && {
+                  accountHolderName: bankDetails.accountHolderName,
+                }),
+                ...(bankDetails.accountNumber && {
+                  accountNumber: String(bankDetails.accountNumber).trim(),
+                }),
+                ...(bankDetails.ifscCode && {
+                  ifscCode: String(bankDetails.ifscCode).toUpperCase().trim(),
+                }),
+                ...(bankDetails.swiftCode && {
+                  swiftCode: String(bankDetails.swiftCode).toUpperCase().trim(),
+                }),
+                ...(bankDetails.branchName && {
+                  branchName: bankDetails.branchName,
+                }),
+              },
+            },
+          );
+        } else if (hasBankDetails) {
+          // 👇 Naya bank create karo (agar bank details complete hain)
+          await CompanyBankAccount.create({
+            organizationId: ctx.organizationId,
+            companyId: ctx.companyId,
+            tallyExternalId: String(record.tallyExternalId),
+            bankName: doc.name,
+            under: "Bank Accounts",
+            accountHolderName: bankDetails.accountHolderName || "",
+            accountNumber: String(bankDetails.accountNumber || "").trim(),
+            ifscCode: String(bankDetails.ifscCode || "")
+              .toUpperCase()
+              .trim(),
+            swiftCode: String(bankDetails.swiftCode || "")
+              .toUpperCase()
+              .trim(),
+            branchName: bankDetails.branchName || "",
+            isDefault: false,
+          });
         }
       }
+    }
 
       lastExternalId = String(record.tallyExternalId);
     } catch (err) {

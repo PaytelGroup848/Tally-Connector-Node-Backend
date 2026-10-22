@@ -106,23 +106,24 @@ const getDashboard = asyncHandler(async (req, res) => {
   ]);
 
   // ---- 2. Cash & Bank Balance (current snapshot, no historical % available) ----
-  const cashBankAgg = await Ledger.aggregate([
-    {
-      $match: {
-        ...scope,
-        $or: [
-          { group: { $in: ["Cash-in-hand", "Bank Accounts"] } },
-          { parent: { $in: ["Cash-in-hand", "Bank Accounts"] } },
-        ],
-      },
+const cashBankAgg = await Ledger.aggregate([
+  {
+    $match: {
+      ...scope,
+      $or: [
+        { group: { $regex: /^(cash-in-hand|bank accounts)$/i } },
+        { parent: { $regex: /^(cash-in-hand|bank accounts)$/i } },
+        { ledgerType: { $regex: /^(cash|bank)$/i } },
+      ],
     },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: { $ifNull: ["$closingBalance", 0] } },
-      },
+  },
+  {
+    $group: {
+      _id: null,
+      total: { $sum: { $ifNull: ["$closingBalance", 0] } },
     },
-  ]);
+  },
+]);
   const cashBankBalance = cashBankAgg[0]?.total || 0;
 
   // ---- 3. Sales & Receipts chart (daily buckets within range) ----

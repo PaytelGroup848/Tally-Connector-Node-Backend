@@ -201,7 +201,8 @@ const submitResult = asyncHandler(async (req, res) => {
     _id: req.params.commandId,
     organizationId: req.organizationId,
   });
-  if (!command) throw new ApiError(404, 'Command not found', ERROR_CODES.COMMAND_NOT_FOUND);
+  if (!command)
+    throw new ApiError(404, "Command not found", ERROR_CODES.COMMAND_NOT_FOUND);
 
   command.status = req.body.status;
   command.result = req.body.resultPayload || null;
@@ -209,11 +210,32 @@ const submitResult = asyncHandler(async (req, res) => {
   command.completedAt = new Date();
   await command.save();
 
+  // 👇 NAYA: Agar ye CREATE_LEDGER ya UPDATE_LEDGER command thi,
+  // toh CompanyBankAccount ka tallyExternalId update karo
+  if (command.type === "CREATE_LEDGER" || command.type === "UPDATE_LEDGER") {
+    const resultPayload = req.body.resultPayload || {};
+    const tallyExternalId = resultPayload.tallyExternalId;
+    const ledgerId = command.payload?.ledgerId;
+
+    if (tallyExternalId && ledgerId) {
+      await CompanyBankAccount.updateOne(
+        { _id: ledgerId },
+        { $set: { tallyExternalId: String(tallyExternalId) } },
+      );
+    }
+  }
+
   return send(
     res,
     200,
-    { command: { id: command._id, status: command.status, result: command.result } },
-    'Result recorded'
+    {
+      command: {
+        id: command._id,
+        status: command.status,
+        result: command.result,
+      },
+    },
+    "Result recorded",
   );
 });
 
