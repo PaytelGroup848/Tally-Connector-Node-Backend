@@ -694,7 +694,7 @@ const updateTallyBankLedger = asyncHandler(async (req, res) => {
     );
   }
 
-  // 👇 Case 1: MongoDB _id (app bank hai)
+
   if (mongoose.isValidObjectId(tallyExternalId)) {
     const bank = await CompanyBankAccount.findOne({
       ...scope,
@@ -720,9 +720,9 @@ const updateTallyBankLedger = asyncHandler(async (req, res) => {
           parent: bank.under || "Bank Accounts",
           ledgerType: "BANK",
           bankDetails: {
-            accountHolderName: bank.accountHolderName,
-            accountNumber: bank.accountNumber,
-            ifscCode: bank.ifscCode,
+            accountHolderName: bank.accountHolderName || "",
+            accountNumber: bank.accountNumber || "",
+            ifscCode: bank.ifscCode || "",
             swiftCode: bank.swiftCode || "",
             branchName: bank.branchName || "",
             bankName: bank.bankName,
@@ -740,8 +740,18 @@ const updateTallyBankLedger = asyncHandler(async (req, res) => {
     );
   }
 
-  // 👇 Case 2: Tally UUID (sirf Tally bank)
-  if (Object.keys(data).length === 0) {
+
+  const ledgerName = req.body.ledgerName || data.bankName || req.body.bankName;
+
+  if (!ledgerName) {
+    throw new ApiError(
+      422,
+      "ledgerName (bank name) is required for Tally update",
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  if (Object.keys(data).length === 0 && !req.body.ledgerName) {
     throw new ApiError(
       422,
       "No fields to update",
@@ -756,16 +766,17 @@ const updateTallyBankLedger = asyncHandler(async (req, res) => {
     payload: {
       companyId: String(company._id),
       tallyExternalId,
-      ledgerName: data.bankName || req.body.bankName,
+      ledgerName,
       parent: data.under || req.body.under || "Bank Accounts",
       ledgerType: "BANK",
       bankDetails: {
-        accountHolderName: data.accountHolderName || req.body.accountHolderName,
-        accountNumber: data.accountNumber || req.body.accountNumber,
-        ifscCode: data.ifscCode || req.body.ifscCode,
+        accountHolderName:
+          data.accountHolderName || req.body.accountHolderName || "",
+        accountNumber: data.accountNumber || req.body.accountNumber || "",
+        ifscCode: data.ifscCode || req.body.ifscCode || "",
         swiftCode: data.swiftCode || req.body.swiftCode || "",
         branchName: data.branchName || req.body.branchName || "",
-        bankName: data.bankName || req.body.bankName,
+        bankName: ledgerName,
       },
     },
     user: req.user,
