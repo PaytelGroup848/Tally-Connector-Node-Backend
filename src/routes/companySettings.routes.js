@@ -105,4 +105,11 @@ router.delete(
   ctrl.deleteBank,
 );
 
+router.patch(
+  "/:id/banks/tally/:tallyExternalId",
+  ...write,
+  validate,
+  ctrl.updateTallyBankLedger,
+);
+
 module.exports = router;

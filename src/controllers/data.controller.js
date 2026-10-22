@@ -1130,7 +1130,6 @@ const listBankLedgers = asyncHandler(async (req, res) => {
     $or: [{ group: "Bank Accounts" }, { parent: "Bank Accounts" }],
   };
 
-  // Search by bank ledger name
   if (req.query.q) {
     const regex = getSearchRegex(req.query.q);
     filter.name = regex;
@@ -1139,25 +1138,19 @@ const listBankLedgers = asyncHandler(async (req, res) => {
   const [items, total, totalAmountResult] = await Promise.all([
     Ledger.find(filter)
       .select(
-        "_id tallyExternalId name openingBalance closingBalance group parent ledgerType",
+        "_id tallyExternalId name openingBalance closingBalance group parent ledgerType raw", 
       )
       .sort({ name: 1, _id: 1 })
       .skip(skip)
       .limit(limit)
       .lean(),
-
     Ledger.countDocuments(filter),
-
     Ledger.aggregate([
       { $match: filter },
       {
         $group: {
           _id: null,
-          totalAmount: {
-            $sum: {
-              $ifNull: ["$closingBalance", 0],
-            },
-          },
+          totalAmount: { $sum: { $ifNull: ["$closingBalance", 0] } },
         },
       },
     ]),
@@ -1166,11 +1159,24 @@ const listBankLedgers = asyncHandler(async (req, res) => {
   const totalAmount =
     totalAmountResult.length > 0 ? totalAmountResult[0].totalAmount : 0;
 
+  
+  const shapedItems = items.map((item) => ({
+    _id: item._id,
+    tallyExternalId: item.tallyExternalId,
+    name: item.name,
+    group: item.group,
+    parent: item.parent,
+    ledgerType: item.ledgerType,
+    openingBalance: item.openingBalance,
+    closingBalance: item.closingBalance,
+    bankDetails: item.raw?.bankDetails || null, 
+  }));
+
   return send(
     res,
     200,
     {
-      items,
+      items: shapedItems,
       total,
       page,
       limit,

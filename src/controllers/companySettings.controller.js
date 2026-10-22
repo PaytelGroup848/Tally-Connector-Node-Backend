@@ -13,6 +13,7 @@ const {
 } = require("../middlewares/upload.middleware");
 const { logAudit } = require("../services/audit.service");
 const { postTallyCommand } = require("../services/tallyCommand.service");
+const { default: mongoose } = require("mongoose");
 
 const MAX_BANKS_PER_COMPANY = 20;
 
@@ -679,6 +680,99 @@ const makeDefaultBank = asyncHandler(async (req, res) => {
   return send(res, 200, { bank: shapeBank(bank) }, "Default bank updated");
 });
 
+const updateTallyBankLedger = asyncHandler(async (req, res) => {
+  const company = await scopedCompany(req);
+  const scope = { organizationId: req.organizationId, companyId: company._id };
+  const { tallyExternalId } = req.params;
+  const data = pick(req.body, BANK_FIELDS);
+
+  if (!tallyExternalId) {
+    throw new ApiError(
+      400,
+      "Tally external ID is required",
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  // 👇 Case 1: MongoDB _id (app bank hai)
+  if (mongoose.isValidObjectId(tallyExternalId)) {
+    const bank = await CompanyBankAccount.findOne({
+      ...scope,
+      _id: tallyExternalId,
+    });
+
+    if (!bank) {
+      throw new ApiError(404, "Bank account not found", ERROR_CODES.NOT_FOUND);
+    }
+
+    Object.assign(bank, data);
+    await bank.save();
+
+    if (bank.tallyExternalId) {
+      await postTallyCommand({
+        organizationId: req.organizationId,
+        companyId: company._id,
+        type: "UPDATE_LEDGER",
+        payload: {
+          companyId: String(company._id),
+          tallyExternalId: bank.tallyExternalId,
+          ledgerName: bank.bankName,
+          parent: bank.under || "Bank Accounts",
+          ledgerType: "BANK",
+          bankDetails: {
+            accountHolderName: bank.accountHolderName,
+            accountNumber: bank.accountNumber,
+            ifscCode: bank.ifscCode,
+            swiftCode: bank.swiftCode || "",
+            branchName: bank.branchName || "",
+            bankName: bank.bankName,
+          },
+        },
+        user: req.user,
+      });
+    }
+
+    return send(
+      res,
+      200,
+      { bank: shapeBank(bank), tallySynced: Boolean(bank.tallyExternalId) },
+      "Bank updated",
+    );
+  }
+
+  // 👇 Case 2: Tally UUID (sirf Tally bank)
+  if (Object.keys(data).length === 0) {
+    throw new ApiError(
+      422,
+      "No fields to update",
+      ERROR_CODES.VALIDATION_ERROR,
+    );
+  }
+
+  await postTallyCommand({
+    organizationId: req.organizationId,
+    companyId: company._id,
+    type: "UPDATE_LEDGER",
+    payload: {
+      companyId: String(company._id),
+      tallyExternalId,
+      ledgerName: data.bankName || req.body.bankName,
+      parent: data.under || req.body.under || "Bank Accounts",
+      ledgerType: "BANK",
+      bankDetails: {
+        accountHolderName: data.accountHolderName || req.body.accountHolderName,
+        accountNumber: data.accountNumber || req.body.accountNumber,
+        ifscCode: data.ifscCode || req.body.ifscCode,
+        swiftCode: data.swiftCode || req.body.swiftCode || "",
+        branchName: data.branchName || req.body.branchName || "",
+        bankName: data.bankName || req.body.bankName,
+      },
+    },
+    user: req.user,
+  });
+
+  return send(res, 200, { tallySynced: true }, "Bank sent to Tally for update");
+});
 const deleteBank = asyncHandler(async (req, res) => {
   const company = await scopedCompany(req);
   const scope = { organizationId: req.organizationId, companyId: company._id };
@@ -728,4 +822,5 @@ module.exports = {
   updateBank,
   makeDefaultBank,
   deleteBank,
+  updateTallyBankLedger,
 };
