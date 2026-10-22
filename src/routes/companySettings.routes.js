@@ -19,13 +19,13 @@ const router = express.Router();
 const read = [
   webAuth,
   companyAccessGuard,
-  requirePermission(PERMISSIONS.COMPANY_READ),
+ 
 ];
 const write = [
   webAuth,
   companyAccessGuard,
   requireActiveSubscription,
-  requireRolePermission(PERMISSIONS.COMPANY_SETTINGS_MANAGE),
+
 ];
 
 router.get(
@@ -108,6 +108,7 @@ router.delete(
 router.patch(
   "/:id/banks/tally/:tallyExternalId",
   ...write,
+  ctrl.idValidators,
   validate,
   ctrl.updateTallyBankLedger,
 );
